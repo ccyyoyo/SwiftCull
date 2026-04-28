@@ -1,12 +1,16 @@
 import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QLabel, QGridLayout, QPushButton
+    QLabel, QGridLayout, QPushButton, QSlider
 )
 from PySide6.QtCore import Signal, Qt
 from app.ui.thumbnail_item import ThumbnailItem
 
-SIZES = {"小": 100, "中": 160, "大": 240}
+# Three snap points: small=100, medium=160, large=240
+_SNAP_SIZES = [100, 160, 240]
+
+def _snap(value: int) -> int:
+    return min(_SNAP_SIZES, key=lambda s: abs(s - value))
 
 class ThumbnailGrid(QWidget):
     photo_double_clicked = Signal(int)
@@ -23,7 +27,6 @@ class ThumbnailGrid(QWidget):
         self._tag_repo = None
         self._thumb_svc = None
         self._folder_path = ""
-        self._size_btns: dict[str, QPushButton] = {}
         self._build_ui()
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -32,15 +35,16 @@ class ThumbnailGrid(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("縮圖大小"))
-        for label, size in SIZES.items():
-            btn = QPushButton(label)
-            btn.setCheckable(True)
-            btn.setFixedWidth(40)
-            btn.clicked.connect(lambda checked, s=size, l=label: self._on_size_btn(l, s))
-            self._size_btns[label] = btn
-            toolbar.addWidget(btn)
-        self._size_btns["中"].setChecked(True)
+        toolbar.addWidget(QLabel("縮圖"))
+        # slider spans 0-2, maps to _SNAP_SIZES
+        self._size_slider = QSlider(Qt.Horizontal)
+        self._size_slider.setRange(0, 2)
+        self._size_slider.setValue(1)          # default: 中
+        self._size_slider.setTickPosition(QSlider.TicksBelow)
+        self._size_slider.setTickInterval(1)
+        self._size_slider.setFixedWidth(80)
+        self._size_slider.valueChanged.connect(self._on_slider)
+        toolbar.addWidget(self._size_slider)
         toolbar.addStretch()
         root.addLayout(toolbar)
 
@@ -133,10 +137,8 @@ class ThumbnailGrid(QWidget):
 
         self.selection_changed.emit(list(self._selected))
 
-    def _on_size_btn(self, label: str, size: int):
-        for lbl, btn in self._size_btns.items():
-            btn.setChecked(lbl == label)
-        self._thumb_size = size
+    def _on_slider(self, value: int):
+        self._thumb_size = _SNAP_SIZES[value]
         if self._tag_repo is not None:
             self._rebuild_grid()
 
