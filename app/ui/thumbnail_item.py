@@ -14,7 +14,8 @@ COLOR_MAP = {
 
 class ThumbnailItem(QWidget):
     double_clicked = Signal(int)
-    selection_changed = Signal(int, bool)
+    # modifier: 'ctrl', 'shift', or 'none'
+    selection_changed = Signal(int, str)
 
     def __init__(self, photo_id: int, filename: str, thumb_path: str,
                  status=None, color=None, size=128, parent=None):
@@ -84,5 +85,10 @@ class ThumbnailItem(QWidget):
         self.double_clicked.emit(self.photo_id)
 
     def mousePressEvent(self, event):
-        ctrl = bool(event.modifiers() & Qt.ControlModifier)
-        self.selection_changed.emit(self.photo_id, ctrl)
+        if event.modifiers() & Qt.ShiftModifier:
+            modifier = "shift"
+        elif event.modifiers() & Qt.ControlModifier:
+            modifier = "ctrl"
+        else:
+            modifier = "none"
+        self.selection_changed.emit(self.photo_id, modifier)
