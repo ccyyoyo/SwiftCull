@@ -78,3 +78,7 @@
 - 重要主體設定（face embedding）
 - 個人化設定
 - 多組設定檔
+
+## Backlog / TODO
+
+- 並排對比（Compare View）延後實作，等目前 Loupe 與標記流程穩定後再做

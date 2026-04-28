@@ -2,8 +2,8 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, QApplication
 )
-from PySide6.QtGui import QPixmap, QKeyEvent
-from PySide6.QtCore import Signal, Qt, QTimer, QPoint
+from PySide6.QtGui import QPixmap, QKeyEvent, QWheelEvent
+from PySide6.QtCore import Signal, Qt, QTimer
 
 COLORS = ["red", "orange", "yellow", "green", "blue", "purple"]
 COLOR_HEX = {
@@ -27,6 +27,8 @@ class LoupeView(QWidget):
         self._photo_repo = photo_repo
         self._tag_repo = tag_repo
         self._tag_svc = tag_svc
+        self._zoom = 1.0
+        self._base_pixmap: QPixmap | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -127,17 +129,29 @@ class LoupeView(QWidget):
         super().mouseMoveEvent(event)
 
     def _load_current(self):
+        self._zoom = 1.0
         photo_id = self._ids[self._idx]
         photo = self._photo_repo.get_by_id(photo_id)
         abs_path = os.path.join(self._folder, photo.relative_path)
-        pix = QPixmap(abs_path)
-        screen = QApplication.primaryScreen()
-        if not pix.isNull() and screen:
-            geo = screen.geometry()
-            pix = pix.scaled(geo.width(), geo.height() - 60,
-                             Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self._img_label.setPixmap(pix)
+        self._base_pixmap = QPixmap(abs_path)
+        self._apply_zoom()
         self._update_status_label()
+
+    def _apply_zoom(self):
+        if self._base_pixmap is None or self._base_pixmap.isNull():
+            return
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.geometry()
+            base_w = int(geo.width() * self._zoom)
+            base_h = int((geo.height() - 60) * self._zoom)
+        else:
+            base_w = int(1920 * self._zoom)
+            base_h = int(1020 * self._zoom)
+        pix = self._base_pixmap.scaled(
+            base_w, base_h, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+        self._img_label.setPixmap(pix)
 
     def _update_status_label(self):
         photo_id = self._ids[self._idx]
@@ -188,6 +202,30 @@ class LoupeView(QWidget):
             self.close()
         else:
             self._show_toolbar()
+
+    def wheelEvent(self, event: QWheelEvent):
+        if event.modifiers() & Qt.ControlModifier:
+            # Ctrl + 滾輪 → 縮放
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self._zoom = min(self._zoom * 1.15, 8.0)
+            else:
+                self._zoom = max(self._zoom / 1.15, 0.1)
+            self._apply_zoom()
+        else:
+            # 滾輪上 → 上一張，滾輪下 → 下一張
+            # 若縮放不是 100%，先回到 100% 再換張
+            delta = event.angleDelta().y()
+            if abs(self._zoom - 1.0) > 0.01:
+                self._zoom = 1.0
+                self._apply_zoom()
+            elif delta > 0 and self._idx > 0:
+                self._idx -= 1
+                self._load_current()
+            elif delta < 0 and self._idx < len(self._ids) - 1:
+                self._idx += 1
+                self._load_current()
+        event.accept()
 
     def closeEvent(self, event):
         self._hide_timer.stop()
