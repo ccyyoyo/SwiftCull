@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QSplitter, QLabel, QPushButton, QSizePolicy
 )
 from PySide6.QtGui import QPixmap, QColor
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt
 from app.ui.thumbnail_grid import ThumbnailGrid
 from app.ui.filter_panel import FilterPanel
 from app.utils.theme import BG_DEEP, BG_PANEL, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER
@@ -132,8 +132,14 @@ class GridView(QWidget):
         if checked:
             self._preview.show()
             total = self._splitter.width()
-            self._splitter.setSizes([int(total * 0.35), int(total * 0.65)])
+            self._splitter.setSizes([int(total * 0.55), int(total * 0.45)])
             self._split_btn.setText("⊠  關閉預覽")
+            # restore preview for currently selected photo
+            if len(self._selected_ids) == 1:
+                photo = self._photo_repo.get_by_id(self._selected_ids[0])
+                if photo:
+                    abs_path = os.path.join(self._folder, photo.relative_path)
+                    self._preview.show_photo(abs_path, photo.filename)
         else:
             self._preview.hide()
             self._preview.clear()

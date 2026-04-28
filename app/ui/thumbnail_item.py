@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFont, QPen
 from PySide6.QtCore import Signal, Qt, QRect
 from app.utils.theme import (
@@ -24,7 +24,8 @@ class ThumbnailItem(QWidget):
         self._pixmap = None
 
         # compact: no extra margin, image fills cell
-        self.setFixedSize(size + 4, size + 4)
+        self._label_h = 20
+        self.setFixedSize(size + 4, size + 4 + self._label_h)
         self.setMouseTracking(True)
 
         if thumb_path:
@@ -54,23 +55,22 @@ class ThumbnailItem(QWidget):
         # background
         p.fillRect(0, 0, w, h, QColor(BG_ITEM))
 
-        # image centered
+        # image centered in upper zone (above label area)
+        img_zone_h = h - self._label_h
         if self._pixmap:
             img_w = self._pixmap.width()
             img_h = self._pixmap.height()
             x = (w - img_w) // 2
-            y = (h - img_h) // 2
+            y = (img_zone_h - img_h) // 2
             p.drawPixmap(x, y, self._pixmap)
 
-        # hover: filename overlay at bottom
-        if self._hovered or self._selected:
-            overlay = QColor(0, 0, 0, 160)
-            p.fillRect(0, h - 22, w, 22, overlay)
-            p.setPen(QColor("#cccccc"))
-            font = QFont("Segoe UI", 8)
-            p.setFont(font)
-            p.drawText(QRect(4, h - 22, w - 8, 20), Qt.AlignVCenter | Qt.AlignLeft,
-                       self._filename)
+        # filename label area at bottom — always visible
+        p.fillRect(0, img_zone_h, w, self._label_h, QColor(0, 0, 0, 180))
+        p.setPen(QColor("#aaaaaa"))
+        font = QFont("Segoe UI", 8)
+        p.setFont(font)
+        p.drawText(QRect(4, img_zone_h, w - 8, self._label_h),
+                   Qt.AlignVCenter | Qt.AlignLeft, self._filename)
 
         # status badge — bottom-right circle with icon
         if self._status and self._status in STATUS_ICON:

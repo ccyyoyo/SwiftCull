@@ -2,8 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QCheckBox,
     QPushButton, QSizePolicy, QHBoxLayout
 )
-from PySide6.QtGui import QPainter, QColor, QPen
-from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QEasingCurve, QRect
+from PySide6.QtGui import QPainter, QColor, QPen, QFont
+from PySide6.QtCore import Signal, Qt, QRect
 from app.utils.theme import (
     BG_PANEL, BG_HOVER, BORDER, ACCENT,
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
@@ -15,7 +15,7 @@ STATUSES = ["pick", "reject", "maybe", "untagged"]
 COLORS = ["red", "orange", "yellow", "green", "blue", "purple"]
 
 PANEL_WIDTH = 160
-TAB_WIDTH = 20          # floating tab strip width when collapsed
+TAB_WIDTH = 28          # collapsed tab strip width
 
 
 class _ColorDotCheckBox(QWidget):
@@ -121,6 +121,58 @@ class _StatusCheckBox(QWidget):
         p.end()
 
 
+class _CollapsedTab(QWidget):
+    """Vertical tab shown when panel is collapsed. Click to expand."""
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedWidth(TAB_WIDTH)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("展開篩選面板")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.TextAntialiasing)
+
+        # background
+        p.fillRect(self.rect(), QColor(BG_PANEL))
+
+        # right border line
+        p.setPen(QPen(QColor("#2a2a2a"), 1))
+        p.drawLine(self.width() - 1, 0, self.width() - 1, self.height())
+
+        # hover highlight strip
+        p.fillRect(0, 0, self.width() - 1, self.height(), QColor(BG_PANEL))
+
+        # draw rotated text "▶ FILTER" centered vertically
+        p.save()
+        p.translate(self.width() / 2, self.height() / 2)
+        p.rotate(-90)
+        font = QFont("Segoe UI", 9, QFont.Bold)
+        p.setFont(font)
+        p.setPen(QColor(TEXT_SECONDARY))
+        text = "▶  FILTER"
+        fm = p.fontMetrics()
+        tw = fm.horizontalAdvance(text)
+        th = fm.height()
+        p.drawText(int(-tw / 2), int(th / 3), text)
+        p.restore()
+        p.end()
+
+    def enterEvent(self, event):
+        self.update()
+
+    def leaveEvent(self, event):
+        self.update()
+
+
 class FilterPanel(QWidget):
     filter_changed = Signal(list, list)
 
@@ -130,13 +182,28 @@ class FilterPanel(QWidget):
         self._status_checks: dict[str, _StatusCheckBox] = {}
         self._color_checks: dict[str, _ColorDotCheckBox] = {}
 
-        self.setFixedWidth(PANEL_WIDTH)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-        self.setStyleSheet(f"background:{BG_PANEL}; border-right:1px solid #2a2a2a;")
+        self.setStyleSheet(f"background:{BG_PANEL};")
 
-        root = QVBoxLayout(self)
+        root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        # collapsed tab (shown only when panel is collapsed)
+        self._collapsed_tab = _CollapsedTab()
+        self._collapsed_tab.clicked.connect(self._toggle)
+        self._collapsed_tab.hide()
+        root.addWidget(self._collapsed_tab)
+
+        # expanded panel content
+        self._panel_body = QWidget()
+        self._panel_body.setFixedWidth(PANEL_WIDTH)
+        self._panel_body.setStyleSheet(
+            f"background:{BG_PANEL}; border-right:1px solid #2a2a2a;"
+        )
+        body_layout = QVBoxLayout(self._panel_body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
 
         # header row with toggle
         header = QWidget()
@@ -159,7 +226,7 @@ class FilterPanel(QWidget):
         self._toggle_btn.setCursor(Qt.PointingHandCursor)
         self._toggle_btn.clicked.connect(self._toggle)
         hrow.addWidget(self._toggle_btn)
-        root.addWidget(header)
+        body_layout.addWidget(header)
 
         # content
         self._content = QWidget()
@@ -203,28 +270,17 @@ class FilterPanel(QWidget):
         cl.addWidget(clear_btn)
         cl.addStretch()
 
-        root.addWidget(self._content)
-
-        # animation on maximumWidth
-        self._anim = QPropertyAnimation(self, b"maximumWidth")
-        self._anim.setDuration(200)
-        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        body_layout.addWidget(self._content)
+        root.addWidget(self._panel_body)
 
     def _toggle(self):
         self._expanded = not self._expanded
         if self._expanded:
-            self._content.show()
-            self._toggle_btn.setText("«")
-            self._anim.setStartValue(self.maximumWidth())
-            self._anim.setEndValue(PANEL_WIDTH)
-            self.setMinimumWidth(TAB_WIDTH)
+            self._collapsed_tab.hide()
+            self._panel_body.show()
         else:
-            self._content.hide()
-            self._toggle_btn.setText("»")
-            self._anim.setStartValue(self.maximumWidth())
-            self._anim.setEndValue(TAB_WIDTH + 4)
-            self.setMinimumWidth(0)
-        self._anim.start()
+            self._panel_body.hide()
+            self._collapsed_tab.show()
 
     def _emit_filter(self):
         statuses = [s for s, cb in self._status_checks.items() if cb.isChecked()]
