@@ -1,33 +1,30 @@
 import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QSlider, QLabel, QGridLayout, QPushButton
+    QLabel, QGridLayout, QPushButton
 )
-from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtCore import Signal, Qt
 from app.ui.thumbnail_item import ThumbnailItem
+
+SIZES = {"小": 100, "中": 160, "大": 240}
 
 class ThumbnailGrid(QWidget):
     photo_double_clicked = Signal(int)
     selection_changed = Signal(list)
-    # emitted when user presses P/R/M on selected items
     batch_status_requested = Signal(list, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._thumb_size = 160
         self._items: dict[int, ThumbnailItem] = {}
-        self._photos = []          # current photo list in display order
+        self._photos = []
         self._selected: set[int] = set()
         self._last_clicked_idx: int = -1
         self._tag_repo = None
         self._thumb_svc = None
         self._folder_path = ""
+        self._size_btns: dict[str, QPushButton] = {}
         self._build_ui()
-        # debounce slider to avoid reloading on every pixel
-        self._resize_timer = QTimer()
-        self._resize_timer.setSingleShot(True)
-        self._resize_timer.setInterval(300)
-        self._resize_timer.timeout.connect(self._reload_with_new_size)
         self.setFocusPolicy(Qt.StrongFocus)
 
     def _build_ui(self):
@@ -35,13 +32,15 @@ class ThumbnailGrid(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         toolbar = QHBoxLayout()
-        self._size_slider = QSlider(Qt.Horizontal)
-        self._size_slider.setRange(80, 320)
-        self._size_slider.setValue(self._thumb_size)
-        self._size_slider.setMaximumWidth(200)
-        self._size_slider.valueChanged.connect(self._on_size_changed)
         toolbar.addWidget(QLabel("縮圖大小"))
-        toolbar.addWidget(self._size_slider)
+        for label, size in SIZES.items():
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setFixedWidth(40)
+            btn.clicked.connect(lambda checked, s=size, l=label: self._on_size_btn(l, s))
+            self._size_btns[label] = btn
+            toolbar.addWidget(btn)
+        self._size_btns["中"].setChecked(True)
         toolbar.addStretch()
         root.addLayout(toolbar)
 
@@ -134,11 +133,10 @@ class ThumbnailGrid(QWidget):
 
         self.selection_changed.emit(list(self._selected))
 
-    def _on_size_changed(self, value: int):
-        self._thumb_size = value
-        self._resize_timer.start()
-
-    def _reload_with_new_size(self):
+    def _on_size_btn(self, label: str, size: int):
+        for lbl, btn in self._size_btns.items():
+            btn.setChecked(lbl == label)
+        self._thumb_size = size
         if self._tag_repo is not None:
             self._rebuild_grid()
 
