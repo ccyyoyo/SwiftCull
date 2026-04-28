@@ -1,12 +1,125 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QCheckBox, QPushButton, QSizePolicy
+    QWidget, QVBoxLayout, QLabel, QCheckBox,
+    QPushButton, QSizePolicy, QHBoxLayout
 )
-from PySide6.QtCore import Signal
+from PySide6.QtGui import QPainter, QColor, QPen
+from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QEasingCurve, QRect
+from app.utils.theme import (
+    BG_PANEL, BG_HOVER, BORDER, ACCENT,
+    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+    STATUS_ICON, STATUS_COLOR, COLOR_DOT,
+    PICK_CLR, REJECT_CLR, MAYBE_CLR,
+)
 
 STATUSES = ["pick", "reject", "maybe", "untagged"]
 COLORS = ["red", "orange", "yellow", "green", "blue", "purple"]
 
-PANEL_WIDTH = 180
+PANEL_WIDTH = 160
+TAB_WIDTH = 20          # floating tab strip width when collapsed
+
+
+class _ColorDotCheckBox(QWidget):
+    """Custom checkbox showing color dot + label."""
+    stateChanged = Signal(int)
+
+    def __init__(self, color_key: str, parent=None):
+        super().__init__(parent)
+        self._color_key = color_key
+        self._checked = False
+        self.setFixedHeight(22)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, v: bool):
+        self._checked = v
+        self.update()
+        self.stateChanged.emit(2 if v else 0)
+
+    def mousePressEvent(self, event):
+        self._checked = not self._checked
+        self.update()
+        self.stateChanged.emit(2 if self._checked else 0)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        # dot
+        dot_color = QColor(COLOR_DOT.get(self._color_key, "#888"))
+        if self._checked:
+            p.setBrush(dot_color)
+            p.setPen(Qt.NoPen)
+        else:
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(dot_color, 1.5))
+        p.drawEllipse(4, 5, 12, 12)
+        # label
+        p.setPen(QColor(TEXT_PRIMARY if self._checked else TEXT_SECONDARY))
+        from PySide6.QtGui import QFont
+        p.setFont(QFont("Segoe UI", 10))
+        p.drawText(QRect(22, 0, self.width() - 22, self.height()),
+                   Qt.AlignVCenter | Qt.AlignLeft, self._color_key)
+        p.end()
+
+
+class _StatusCheckBox(QWidget):
+    """Custom checkbox showing status icon + label."""
+    stateChanged = Signal(int)
+
+    def __init__(self, status_key: str, parent=None):
+        super().__init__(parent)
+        self._key = status_key
+        self._checked = False
+        self.setFixedHeight(22)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, v: bool):
+        self._checked = v
+        self.update()
+        self.stateChanged.emit(2 if v else 0)
+
+    def mousePressEvent(self, event):
+        self._checked = not self._checked
+        self.update()
+        self.stateChanged.emit(2 if self._checked else 0)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        from PySide6.QtGui import QFont
+
+        if self._key == "untagged":
+            icon_color = QColor(TEXT_MUTED)
+            icon_char = "—"
+        else:
+            icon_color = QColor(STATUS_COLOR.get(self._key, "#888"))
+            icon_char = STATUS_ICON.get(self._key, "?")
+
+        if self._checked:
+            p.setBrush(icon_color)
+            p.setPen(Qt.NoPen)
+            p.drawEllipse(2, 3, 16, 16)
+            p.setPen(QColor("#000"))
+        else:
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(icon_color, 1.5))
+            p.drawEllipse(2, 3, 16, 16)
+            p.setPen(icon_color)
+
+        p.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        p.drawText(QRect(2, 3, 16, 16), Qt.AlignCenter, icon_char)
+
+        p.setPen(QColor(TEXT_PRIMARY if self._checked else TEXT_SECONDARY))
+        p.setFont(QFont("Segoe UI", 10))
+        label = self._key.capitalize()
+        p.drawText(QRect(24, 0, self.width() - 24, self.height()),
+                   Qt.AlignVCenter | Qt.AlignLeft, label)
+        p.end()
+
 
 class FilterPanel(QWidget):
     filter_changed = Signal(list, list)
@@ -14,56 +127,104 @@ class FilterPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._expanded = True
-        self._status_checks: dict[str, QCheckBox] = {}
-        self._color_checks: dict[str, QCheckBox] = {}
+        self._status_checks: dict[str, _StatusCheckBox] = {}
+        self._color_checks: dict[str, _ColorDotCheckBox] = {}
 
-        # fixed width always — content hides, panel stays same width
         self.setFixedWidth(PANEL_WIDTH)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.setStyleSheet(f"background:{BG_PANEL}; border-right:1px solid #2a2a2a;")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(6, 6, 6, 6)
-        root.setSpacing(4)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        # toggle button — always at top
+        # header row with toggle
+        header = QWidget()
+        header.setFixedHeight(36)
+        header.setStyleSheet(f"background:#1e1e1e; border-bottom:1px solid #2a2a2a;")
+        hrow = QHBoxLayout(header)
+        hrow.setContentsMargins(10, 0, 6, 0)
+        title_lbl = QLabel("FILTER")
+        title_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; letter-spacing:2px; font-weight:600;"
+        )
+        hrow.addWidget(title_lbl)
+        hrow.addStretch()
         self._toggle_btn = QPushButton("«")
-        self._toggle_btn.setToolTip("收合篩選欄")
-        self._toggle_btn.setFixedHeight(24)
+        self._toggle_btn.setFixedSize(24, 24)
+        self._toggle_btn.setStyleSheet(
+            f"background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:14px; padding:0;"
+        )
+        self._toggle_btn.setCursor(Qt.PointingHandCursor)
         self._toggle_btn.clicked.connect(self._toggle)
-        root.addWidget(self._toggle_btn)
+        hrow.addWidget(self._toggle_btn)
+        root.addWidget(header)
 
-        # collapsible content
+        # content
         self._content = QWidget()
         cl = QVBoxLayout(self._content)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.setSpacing(4)
+        cl.setContentsMargins(10, 8, 10, 8)
+        cl.setSpacing(2)
 
-        cl.addWidget(QLabel("標記狀態"))
+        # status section
+        sec1 = QLabel("STATUS")
+        sec1.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(sec1)
         for s in STATUSES:
-            cb = QCheckBox(s)
+            cb = _StatusCheckBox(s)
             cb.stateChanged.connect(self._emit_filter)
             self._status_checks[s] = cb
             cl.addWidget(cb)
 
-        cl.addWidget(QLabel("顏色標籤"))
+        cl.addSpacing(8)
+
+        # color section
+        sec2 = QLabel("COLOR")
+        sec2.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(sec2)
         for c in COLORS:
-            cb = QCheckBox(c)
+            cb = _ColorDotCheckBox(c)
             cb.stateChanged.connect(self._emit_filter)
             self._color_checks[c] = cb
             cl.addWidget(cb)
 
+        cl.addSpacing(8)
         clear_btn = QPushButton("清除篩選")
+        clear_btn.setStyleSheet(
+            f"background:transparent; color:{TEXT_SECONDARY}; border:1px solid #333;"
+            f" border-radius:3px; padding:4px 8px; font-size:10px;"
+        )
         clear_btn.clicked.connect(self._clear_all)
         cl.addWidget(clear_btn)
         cl.addStretch()
 
         root.addWidget(self._content)
 
+        # animation on maximumWidth
+        self._anim = QPropertyAnimation(self, b"maximumWidth")
+        self._anim.setDuration(200)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+
     def _toggle(self):
         self._expanded = not self._expanded
-        self._content.setVisible(self._expanded)
-        self._toggle_btn.setText("«" if self._expanded else "»")
-        self._toggle_btn.setToolTip("收合篩選欄" if self._expanded else "展開篩選欄")
+        if self._expanded:
+            self._content.show()
+            self._toggle_btn.setText("«")
+            self._anim.setStartValue(self.maximumWidth())
+            self._anim.setEndValue(PANEL_WIDTH)
+            self.setMinimumWidth(TAB_WIDTH)
+        else:
+            self._content.hide()
+            self._toggle_btn.setText("»")
+            self._anim.setStartValue(self.maximumWidth())
+            self._anim.setEndValue(TAB_WIDTH + 4)
+            self.setMinimumWidth(0)
+        self._anim.start()
 
     def _emit_filter(self):
         statuses = [s for s, cb in self._status_checks.items() if cb.isChecked()]

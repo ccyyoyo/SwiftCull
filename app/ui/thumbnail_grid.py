@@ -4,13 +4,11 @@ from PySide6.QtWidgets import (
     QLabel, QGridLayout, QPushButton, QSlider
 )
 from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QColor
 from app.ui.thumbnail_item import ThumbnailItem
+from app.utils.theme import BG_MAIN, BG_PANEL, TEXT_SECONDARY
 
-# Three snap points: small=100, medium=160, large=240
 _SNAP_SIZES = [100, 160, 240]
-
-def _snap(value: int) -> int:
-    return min(_SNAP_SIZES, key=lambda s: abs(s - value))
 
 class ThumbnailGrid(QWidget):
     photo_double_clicked = Signal(int)
@@ -33,26 +31,41 @@ class ThumbnailGrid(QWidget):
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("縮圖"))
-        # slider spans 0-2, maps to _SNAP_SIZES
+        # toolbar
+        toolbar_widget = QWidget()
+        toolbar_widget.setFixedHeight(36)
+        toolbar_widget.setStyleSheet(f"background:{BG_PANEL}; border-bottom:1px solid #2a2a2a;")
+        toolbar = QHBoxLayout(toolbar_widget)
+        toolbar.setContentsMargins(10, 0, 10, 0)
+
+        size_lbl = QLabel("SIZE")
+        size_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; letter-spacing:1px;")
+        toolbar.addWidget(size_lbl)
+
         self._size_slider = QSlider(Qt.Horizontal)
         self._size_slider.setRange(0, 2)
-        self._size_slider.setValue(1)          # default: 中
+        self._size_slider.setValue(1)
         self._size_slider.setTickPosition(QSlider.TicksBelow)
         self._size_slider.setTickInterval(1)
-        self._size_slider.setFixedWidth(80)
+        self._size_slider.setFixedWidth(72)
         self._size_slider.valueChanged.connect(self._on_slider)
         toolbar.addWidget(self._size_slider)
+
+        self._size_lbl = QLabel("M")
+        self._size_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; min-width:12px;")
+        toolbar.addWidget(self._size_lbl)
         toolbar.addStretch()
-        root.addLayout(toolbar)
+        root.addWidget(toolbar_widget)
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._container = QWidget()
+        self._container.setStyleSheet(f"background:{BG_MAIN};")
         self._grid = QGridLayout(self._container)
-        self._grid.setSpacing(4)
+        self._grid.setSpacing(2)       # compact
+        self._grid.setContentsMargins(4, 4, 4, 4)
         self._container.setLayout(self._grid)
         self._scroll.setWidget(self._container)
         root.addWidget(self._scroll)
@@ -139,6 +152,7 @@ class ThumbnailGrid(QWidget):
 
     def _on_slider(self, value: int):
         self._thumb_size = _SNAP_SIZES[value]
+        self._size_lbl.setText(["S", "M", "L"][value])
         if self._tag_repo is not None:
             self._rebuild_grid()
 
