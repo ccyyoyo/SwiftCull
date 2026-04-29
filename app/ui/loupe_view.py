@@ -54,6 +54,17 @@ class LoupeView(QWidget):
         self._status_label.resize(200, 36)
         self._status_label.raise_()
 
+        # --- blur score overlay (top-right) ---
+        self._blur_label = QLabel("")
+        self._blur_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._blur_label.setStyleSheet(
+            "color: #aaa; font-size: 13px; background: transparent; padding: 4px;"
+        )
+        self._blur_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._blur_label.setParent(self)
+        self._blur_label.resize(200, 30)
+        self._blur_label.raise_()
+
         # --- bottom toolbar (auto-hide) ---
         self._toolbar = QWidget(self)
         self._toolbar.setStyleSheet("background: rgba(0,0,0,200); color: white;")
@@ -101,6 +112,7 @@ class LoupeView(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._blur_label.move(self.width() - 210, 16)
         self._position_toolbar()
 
     def _position_toolbar(self):
@@ -136,6 +148,7 @@ class LoupeView(QWidget):
         self._base_pixmap = QPixmap(abs_path)
         self._apply_zoom()
         self._update_status_label()
+        self._update_blur_label()
 
     def _apply_zoom(self):
         if self._base_pixmap is None or self._base_pixmap.isNull():
@@ -170,6 +183,35 @@ class LoupeView(QWidget):
             self._status_label.setStyleSheet(
                 "color: white; font-size: 18px; font-weight: bold;"
                 " background: transparent; padding: 4px;"
+            )
+
+    def _update_blur_label(self):
+        import json
+        from app.utils.theme import BLUR_BLURRY, BLUR_SHARP, BLUR_UNKNOWN
+        photo_id = self._ids[self._idx]
+        photo = self._photo_repo.get_by_id(photo_id)
+        score = photo.blur_score if photo else None
+        if score is None:
+            self._blur_label.setText("Blur: —")
+            self._blur_label.setStyleSheet(
+                f"color:{BLUR_UNKNOWN}; font-size:13px; background:transparent; padding:4px;"
+            )
+        else:
+            settings_path = os.path.join(
+                os.environ.get("APPDATA", os.path.expanduser("~")),
+                "SwiftCull", "settings.json"
+            )
+            threshold = 100.0
+            try:
+                with open(settings_path, encoding="utf-8") as f:
+                    s = json.load(f)
+                    threshold = float(s.get("blur_fixed_threshold", 100.0))
+            except Exception:
+                pass
+            color = BLUR_BLURRY if score < threshold else BLUR_SHARP
+            self._blur_label.setText(f"Blur: {score:.1f}")
+            self._blur_label.setStyleSheet(
+                f"color:{color}; font-size:13px; background:transparent; padding:4px;"
             )
 
     def _set_status(self, status: str):
