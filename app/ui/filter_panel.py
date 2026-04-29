@@ -9,6 +9,7 @@ from app.utils.theme import (
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
     STATUS_ICON, STATUS_COLOR, COLOR_DOT,
     PICK_CLR, REJECT_CLR, MAYBE_CLR,
+    BLUR_BLURRY, BLUR_SHARP, BLUR_UNKNOWN,
 )
 
 STATUSES = ["pick", "reject", "maybe", "untagged"]
@@ -174,13 +175,14 @@ class _CollapsedTab(QWidget):
 
 
 class FilterPanel(QWidget):
-    filter_changed = Signal(list, list)
+    filter_changed = Signal(list, list, list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._expanded = True
         self._status_checks: dict[str, _StatusCheckBox] = {}
         self._color_checks: dict[str, _ColorDotCheckBox] = {}
+        self._blur_checks: dict = {}
 
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setStyleSheet(f"background:{BG_PANEL};")
@@ -268,6 +270,39 @@ class FilterPanel(QWidget):
         )
         clear_btn.clicked.connect(self._clear_all)
         cl.addWidget(clear_btn)
+
+        cl.addSpacing(8)
+
+        sec3 = QLabel("BLUR")
+        sec3.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(sec3)
+
+        blur_header_w = QWidget()
+        blur_header_l = QHBoxLayout(blur_header_w)
+        blur_header_l.setContentsMargins(0, 0, 0, 0)
+        blur_header_l.setSpacing(4)
+        blur_header_l.addStretch()
+        gear_btn = QPushButton("⚙")
+        gear_btn.setFixedSize(18, 18)
+        gear_btn.setStyleSheet(
+            f"background:transparent; color:{TEXT_MUTED}; border:none; font-size:11px; padding:0;"
+        )
+        gear_btn.setCursor(Qt.PointingHandCursor)
+        gear_btn.setToolTip("模糊偵測設定")
+        gear_btn.clicked.connect(self._open_blur_settings)
+        blur_header_l.addWidget(gear_btn)
+        cl.addWidget(blur_header_w)
+
+        from PySide6.QtWidgets import QCheckBox as _QCB
+        for blur_key, label in [("blurry", "模糊"), ("sharp", "清晰"), ("unanalyzed", "未分析")]:
+            cb = _QCB(label)
+            cb.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+            cb.stateChanged.connect(self._emit_filter)
+            self._blur_checks[blur_key] = cb
+            cl.addWidget(cb)
+
         cl.addStretch()
 
         body_layout.addWidget(self._content)
@@ -285,8 +320,16 @@ class FilterPanel(QWidget):
     def _emit_filter(self):
         statuses = [s for s, cb in self._status_checks.items() if cb.isChecked()]
         colors = [c for c, cb in self._color_checks.items() if cb.isChecked()]
-        self.filter_changed.emit(statuses, colors)
+        blur = [k for k, cb in self._blur_checks.items() if cb.isChecked()]
+        self.filter_changed.emit(statuses, colors, blur)
 
     def _clear_all(self):
-        for cb in list(self._status_checks.values()) + list(self._color_checks.values()):
+        for cb in (list(self._status_checks.values())
+                   + list(self._color_checks.values())
+                   + list(self._blur_checks.values())):
             cb.setChecked(False)
+
+    def _open_blur_settings(self):
+        from app.ui.blur_settings_dialog import BlurSettingsDialog
+        dlg = BlurSettingsDialog(self)
+        dlg.exec()
