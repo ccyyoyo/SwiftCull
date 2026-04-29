@@ -1,13 +1,15 @@
 import os
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
-    QSplitter, QLabel, QPushButton, QSizePolicy
+    QSplitter, QLabel, QPushButton, QSizePolicy, QProgressBar
 )
 from PySide6.QtGui import QPixmap, QColor
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from app.ui.thumbnail_grid import ThumbnailGrid
 from app.ui.filter_panel import FilterPanel
-from app.utils.theme import BG_DEEP, BG_PANEL, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER
+from app.utils.theme import (
+    BG_DEEP, BG_PANEL, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, REJECT_CLR
+)
 
 class _PreviewPane(QWidget):
     """Right-side large image preview for split mode."""
@@ -57,6 +59,8 @@ class _PreviewPane(QWidget):
 
 
 class GridView(QWidget):
+    refresh_requested = Signal()
+
     def __init__(self, folder_path, photo_repo, tag_repo,
                  thumb_svc, tag_svc, filter_svc, parent=None):
         super().__init__(parent)
@@ -70,6 +74,7 @@ class GridView(QWidget):
         self._current_statuses = None
         self._current_colors = None
         self._split_mode = False
+        self._import_errors: list[tuple[str, str]] = []
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -86,7 +91,6 @@ class GridView(QWidget):
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(0)
 
-        # top toolbar for split toggle
         self._top_bar = QWidget()
         self._top_bar.setFixedHeight(36)
         self._top_bar.setStyleSheet(
@@ -94,7 +98,41 @@ class GridView(QWidget):
         )
         tb = QHBoxLayout(self._top_bar)
         tb.setContentsMargins(10, 0, 10, 0)
+
+        self._import_label = QLabel("")
+        self._import_label.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px;"
+        )
+        self._import_label.hide()
+        tb.addWidget(self._import_label)
         tb.addStretch()
+
+        self._import_progress = QProgressBar()
+        self._import_progress.setFixedWidth(220)
+        self._import_progress.setFixedHeight(14)
+        self._import_progress.setTextVisible(False)
+        self._import_progress.setStyleSheet(
+            f"QProgressBar {{ background:#1e1e1e; border:1px solid #2a2a2a;"
+            f" border-radius:3px; }}"
+            f"QProgressBar::chunk {{ background:{ACCENT}; border-radius:2px; }}"
+        )
+        self._import_progress.hide()
+        tb.addWidget(self._import_progress)
+
+        self._refresh_btn = QPushButton("↻  重新掃描")
+        self._refresh_btn.setCursor(Qt.PointingHandCursor)
+        self._refresh_btn.setToolTip("重新掃描資料夾，匯入新增的照片")
+        self._refresh_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ background:#2a2a2a; color:#ddd;"
+            f" border-color:#555; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#222; }}"
+        )
+        self._refresh_btn.clicked.connect(self._on_refresh_clicked)
+        tb.addWidget(self._refresh_btn)
+
         self._split_btn = QPushButton("⊟  分割預覽")
         self._split_btn.setCheckable(True)
         self._split_btn.setStyleSheet(
@@ -123,6 +161,28 @@ class GridView(QWidget):
         self._splitter.addWidget(self._preview)
 
         center_layout.addWidget(self._splitter, stretch=1)
+
+        self._status_bar = QWidget()
+        self._status_bar.setFixedHeight(22)
+        self._status_bar.setStyleSheet(
+            f"background:{BG_PANEL}; border-top:1px solid #2a2a2a;"
+        )
+        sb = QHBoxLayout(self._status_bar)
+        sb.setContentsMargins(10, 0, 10, 0)
+        sb.setSpacing(8)
+        sb.addStretch()
+        self._error_btn = QPushButton("")
+        self._error_btn.setCursor(Qt.PointingHandCursor)
+        self._error_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{REJECT_CLR};"
+            f" border:none; padding:0 4px; font-size:11px; }}"
+            f"QPushButton:hover {{ color:#ff7777; }}"
+        )
+        self._error_btn.clicked.connect(self._show_error_list)
+        self._error_btn.hide()
+        sb.addWidget(self._error_btn)
+        center_layout.addWidget(self._status_bar)
+
         root.addWidget(center, stretch=1)
 
         self._refresh()
@@ -150,6 +210,56 @@ class GridView(QWidget):
         self._current_colors = colors
         photos = self._filter_svc.filter(statuses=statuses, colors=colors)
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
+
+    def begin_import(self, total: int):
+        self._refresh_btn.setEnabled(False)
+        self._import_progress.setRange(0, max(1, total))
+        self._import_progress.setValue(0)
+        self._import_progress.show()
+        self._import_label.setText(f"匯入中 0 / {total}")
+        self._import_label.show()
+
+    def update_import_progress(self, current: int, total: int):
+        self._import_progress.setRange(0, max(1, total))
+        self._import_progress.setValue(current)
+        self._import_label.setText(f"匯入中 {current} / {total}")
+
+    def end_import(self):
+        self._import_progress.hide()
+        self._import_label.hide()
+        self._refresh_btn.setEnabled(True)
+
+    def _on_refresh_clicked(self):
+        self._refresh_btn.setEnabled(False)
+        self.clear_import_errors()
+        self.refresh_requested.emit()
+
+    def on_photo_imported(self, photo):
+        if self._current_statuses or self._current_colors:
+            return
+        self._grid.add_photo(photo)
+
+    def add_import_error(self, rel_path: str, reason: str):
+        self._import_errors.append((rel_path, reason))
+        self._refresh_error_indicator()
+
+    def clear_import_errors(self):
+        self._import_errors.clear()
+        self._refresh_error_indicator()
+
+    def _refresh_error_indicator(self):
+        n = len(self._import_errors)
+        if n == 0:
+            self._error_btn.hide()
+            return
+        self._error_btn.setText(f"⚠  {n} 個檔案讀取失敗")
+        self._error_btn.show()
+
+    def _show_error_list(self):
+        from app.ui.error_list_dialog import ErrorListDialog
+        if not self._import_errors:
+            return
+        ErrorListDialog(self._import_errors, self).exec()
 
     def _on_filter_changed(self, statuses, colors):
         self._refresh(statuses or None, colors or None)

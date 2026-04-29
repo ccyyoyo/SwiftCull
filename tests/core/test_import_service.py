@@ -35,3 +35,24 @@ def test_build_photo_from_jpeg(tmp_path):
     assert photo.file_size > 0
     assert photo.width == 100
     assert photo.height == 80
+
+def test_build_photo_minimal_skips_dimensions(tmp_path):
+    img_path = tmp_path / "min.jpg"
+    _make_jpeg(img_path)
+    svc = ImportService()
+    photo = svc.build_photo_minimal(str(tmp_path), "min.jpg")
+    assert photo.filename == "min.jpg"
+    assert photo.relative_path == "min.jpg"
+    assert photo.file_size > 0
+    assert photo.width is None
+    assert photo.height is None
+    assert photo.shot_at is None
+
+def test_enrich_photo_returns_dimensions(tmp_path):
+    img_path = tmp_path / "e.jpg"
+    _make_jpeg(img_path)
+    svc = ImportService()
+    meta = svc.enrich_photo(str(tmp_path), "e.jpg")
+    assert meta["width"] == 100
+    assert meta["height"] == 80
+    assert "shot_at" in meta

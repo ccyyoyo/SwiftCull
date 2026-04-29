@@ -22,3 +22,51 @@ def test_insert_duplicate_path_raises(db_conn):
     repo.insert(Photo(id=None, relative_path="dup.jpg", filename="dup.jpg", file_size=1))
     with pt.raises(Exception):
         repo.insert(Photo(id=None, relative_path="dup.jpg", filename="dup.jpg", file_size=1))
+
+def test_get_id_by_relative_path(db_conn):
+    repo = PhotoRepository(db_conn)
+    photo_id = repo.insert(Photo(id=None, relative_path="x/y.jpg", filename="y.jpg", file_size=1))
+    assert repo.get_id_by_relative_path("x/y.jpg") == photo_id
+    assert repo.get_id_by_relative_path("missing.jpg") is None
+
+def test_update_metadata_sets_fields(db_conn):
+    repo = PhotoRepository(db_conn)
+    photo_id = repo.insert(Photo(id=None, relative_path="m.jpg", filename="m.jpg", file_size=1))
+    repo.update_metadata(photo_id, {
+        "width": 1920,
+        "height": 1080,
+        "iso": 400,
+        "camera_model": "Sony A7",
+        "shot_at": "2024:01:01 12:00:00",
+        "ignored_field": "should not crash",
+    })
+    photo = repo.get_by_id(photo_id)
+    assert photo.width == 1920
+    assert photo.height == 1080
+    assert photo.iso == 400
+    assert photo.camera_model == "Sony A7"
+    assert photo.shot_at == "2024:01:01 12:00:00"
+
+def test_update_metadata_partial_keeps_others(db_conn):
+    repo = PhotoRepository(db_conn)
+    photo_id = repo.insert(Photo(id=None, relative_path="p.jpg", filename="p.jpg", file_size=1,
+                                  iso=200, width=100, height=200))
+    repo.update_metadata(photo_id, {"iso": 800})
+    photo = repo.get_by_id(photo_id)
+    assert photo.iso == 800
+    assert photo.width == 100
+    assert photo.height == 200
+
+def test_update_metadata_empty_is_noop(db_conn):
+    repo = PhotoRepository(db_conn)
+    photo_id = repo.insert(Photo(id=None, relative_path="n.jpg", filename="n.jpg", file_size=1))
+    repo.update_metadata(photo_id, {})
+    repo.update_metadata(photo_id, {"unknown": 1})
+
+def test_count_returns_row_total(db_conn):
+    repo = PhotoRepository(db_conn)
+    assert repo.count() == 0
+    for i in range(5):
+        repo.insert(Photo(id=None, relative_path=f"c{i}.jpg",
+                          filename=f"c{i}.jpg", file_size=1))
+    assert repo.count() == 5

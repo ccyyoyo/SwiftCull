@@ -9,9 +9,9 @@ from app.utils.theme import (
 
 class ThumbnailItem(QWidget):
     double_clicked = Signal(int)
-    selection_changed = Signal(int, str)   # modifier: 'ctrl'|'shift'|'none'
+    selection_changed = Signal(int, str)
 
-    def __init__(self, photo_id: int, filename: str, thumb_path: str,
+    def __init__(self, photo_id: int, filename: str,
                  status=None, color=None, size=128, parent=None):
         super().__init__(parent)
         self.photo_id = photo_id
@@ -21,19 +21,35 @@ class ThumbnailItem(QWidget):
         self._color = color
         self._size = size
         self._filename = filename
-        self._pixmap = None
+        self._pixmap: QPixmap | None = None
+        self._thumb_requested = False
 
-        # compact: no extra margin, image fills cell
         self._label_h = 20
         self.setFixedSize(size + 4, size + 4 + self._label_h)
         self.setMouseTracking(True)
 
-        if thumb_path:
-            pix = QPixmap(thumb_path)
-            if not pix.isNull():
-                self._pixmap = pix.scaled(
-                    size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation
-                )
+    def has_thumbnail(self) -> bool:
+        return self._pixmap is not None
+
+    def is_thumb_requested(self) -> bool:
+        return self._thumb_requested
+
+    def mark_thumb_requested(self):
+        self._thumb_requested = True
+
+    def reset_thumb(self):
+        self._pixmap = None
+        self._thumb_requested = False
+        self.update()
+
+    def set_thumbnail_pixmap(self, pix: QPixmap):
+        if pix is None or pix.isNull():
+            return
+        self._pixmap = pix.scaled(
+            self._size, self._size,
+            Qt.KeepAspectRatio, Qt.SmoothTransformation,
+        )
+        self.update()
 
     def set_selected(self, selected: bool):
         self._selected = selected
@@ -52,10 +68,8 @@ class ThumbnailItem(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
 
-        # background
         p.fillRect(0, 0, w, h, QColor(BG_ITEM))
 
-        # image centered in upper zone (above label area)
         img_zone_h = h - self._label_h
         if self._pixmap:
             img_w = self._pixmap.width()
@@ -63,6 +77,13 @@ class ThumbnailItem(QWidget):
             x = (w - img_w) // 2
             y = (img_zone_h - img_h) // 2
             p.drawPixmap(x, y, self._pixmap)
+        else:
+            placeholder = QColor("#1a1a1a")
+            p.fillRect(2, 2, w - 4, img_zone_h - 4, placeholder)
+            p.setPen(QColor("#3a3a3a"))
+            p.setFont(QFont("Segoe UI", 16))
+            p.drawText(QRect(0, 0, w, img_zone_h),
+                       Qt.AlignCenter, "·")
 
         # filename label area at bottom — always visible
         p.fillRect(0, img_zone_h, w, self._label_h, QColor(0, 0, 0, 180))

@@ -29,11 +29,37 @@ class PhotoRepository:
         ).fetchone()
         return self._row_to_photo(row) if row else None
 
+    def get_id_by_relative_path(self, relative_path: str) -> Optional[int]:
+        row = self._conn.execute(
+            "SELECT id FROM photos WHERE relative_path=?", (relative_path,)
+        ).fetchone()
+        return int(row["id"]) if row else None
+
+    def update_metadata(self, photo_id: int, fields: dict) -> None:
+        """Partial UPDATE of EXIF/dimension fields. Ignores unknown columns."""
+        allowed = {
+            "shot_at", "width", "height", "camera_model", "lens_model",
+            "iso", "aperture", "shutter_speed", "focal_length",
+        }
+        clean = {k: v for k, v in fields.items() if k in allowed}
+        if not clean:
+            return
+        cols = ", ".join(f"{k}=?" for k in clean)
+        self._conn.execute(
+            f"UPDATE photos SET {cols} WHERE id=?",
+            (*clean.values(), photo_id),
+        )
+        self._conn.commit()
+
     def get_all(self) -> List[Photo]:
         rows = self._conn.execute(
             "SELECT * FROM photos ORDER BY shot_at, filename"
         ).fetchall()
         return [self._row_to_photo(r) for r in rows]
+
+    def count(self) -> int:
+        row = self._conn.execute("SELECT COUNT(*) AS n FROM photos").fetchone()
+        return int(row["n"]) if row else 0
 
     def _row_to_photo(self, row) -> Photo:
         return Photo(

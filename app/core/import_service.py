@@ -1,9 +1,13 @@
 import os
 from pathlib import Path
 from typing import List
-import piexif
 from PIL import Image
 from app.core.models import Photo
+
+try:
+    import piexif
+except ImportError:
+    piexif = None
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp"}
 RAW_EXTENSIONS = {".cr2", ".cr3", ".nef", ".arw", ".raf", ".dng", ".rw2", ".orf"}
@@ -18,27 +22,40 @@ class ImportService:
                 result.append(str(p.relative_to(root)))
         return result
 
-    def build_photo(self, root_path: str, relative_path: str) -> Photo:
+    def build_photo_minimal(self, root_path: str, relative_path: str) -> Photo:
+        """Cheap: only filesystem metadata. Safe to call inside the import loop."""
         abs_path = os.path.join(root_path, relative_path)
-        filename = os.path.basename(relative_path)
-        file_size = os.path.getsize(abs_path)
-        width, height = self._get_dimensions(abs_path)
-        exif = self._read_exif(abs_path)
         return Photo(
             id=None,
             relative_path=relative_path,
-            filename=filename,
-            file_size=file_size,
-            width=width,
-            height=height,
-            shot_at=exif.get("shot_at"),
-            camera_model=exif.get("camera_model"),
-            lens_model=exif.get("lens_model"),
-            iso=exif.get("iso"),
-            aperture=exif.get("aperture"),
-            shutter_speed=exif.get("shutter_speed"),
-            focal_length=exif.get("focal_length"),
+            filename=os.path.basename(relative_path),
+            file_size=os.path.getsize(abs_path),
         )
+
+    def enrich_photo(self, root_path: str, relative_path: str) -> dict:
+        """Expensive: open image for dimensions and parse EXIF. Run in worker thread."""
+        abs_path = os.path.join(root_path, relative_path)
+        width, height = self._get_dimensions(abs_path)
+        exif = self._read_exif(abs_path)
+        return {
+            "width": width,
+            "height": height,
+            "shot_at": exif.get("shot_at"),
+            "camera_model": exif.get("camera_model"),
+            "lens_model": exif.get("lens_model"),
+            "iso": exif.get("iso"),
+            "aperture": exif.get("aperture"),
+            "shutter_speed": exif.get("shutter_speed"),
+            "focal_length": exif.get("focal_length"),
+        }
+
+    def build_photo(self, root_path: str, relative_path: str) -> Photo:
+        """Full build (minimal + enrich). Kept for callers/tests that want everything at once."""
+        photo = self.build_photo_minimal(root_path, relative_path)
+        meta = self.enrich_photo(root_path, relative_path)
+        for k, v in meta.items():
+            setattr(photo, k, v)
+        return photo
 
     def _get_dimensions(self, abs_path: str):
         ext = Path(abs_path).suffix.lower()
@@ -61,6 +78,8 @@ class ImportService:
 
     def _read_exif(self, abs_path: str) -> dict:
         result = {}
+        if piexif is None:
+            return result
         try:
             exif_data = piexif.load(abs_path)
             exif = exif_data.get("Exif", {})
