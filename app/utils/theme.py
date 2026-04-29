@@ -19,6 +19,10 @@ PICK_CLR   = "#3ddc84"   # green
 REJECT_CLR = "#ff4d4d"   # red
 MAYBE_CLR  = "#ffc233"   # amber
 
+BLUR_BLURRY  = "#FF6B6B"   # red-ish — indicates blur warning
+BLUR_SHARP   = "#3ddc84"   # green — same as PICK_CLR
+BLUR_UNKNOWN = "#555555"   # muted — unanalyzed
+
 STATUS_ICON = {"pick": "✓", "reject": "✗", "maybe": "?"}
 STATUS_COLOR = {"pick": PICK_CLR, "reject": REJECT_CLR, "maybe": MAYBE_CLR}
 
