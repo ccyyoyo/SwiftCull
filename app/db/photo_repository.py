@@ -51,6 +51,12 @@ class PhotoRepository:
         )
         self._conn.commit()
 
+    def update_blur_score(self, photo_id: int, score: float) -> None:
+        self._conn.execute(
+            "UPDATE photos SET blur_score=? WHERE id=?", (score, photo_id)
+        )
+        self._conn.commit()
+
     def get_all(self) -> List[Photo]:
         rows = self._conn.execute(
             "SELECT * FROM photos ORDER BY shot_at, filename"
@@ -77,4 +83,5 @@ class PhotoRepository:
             aperture=row["aperture"],
             shutter_speed=row["shutter_speed"],
             focal_length=row["focal_length"],
+            blur_score=row["blur_score"] if "blur_score" in row.keys() else None,
         )

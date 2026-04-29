@@ -17,6 +17,7 @@ class Photo:
     aperture: Optional[float] = None
     shutter_speed: Optional[str] = None
     focal_length: Optional[float] = None
+    blur_score: Optional[float] = None
 
 @dataclass
 class Tag:

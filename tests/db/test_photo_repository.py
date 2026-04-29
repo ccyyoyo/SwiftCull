@@ -70,3 +70,22 @@ def test_count_returns_row_total(db_conn):
         repo.insert(Photo(id=None, relative_path=f"c{i}.jpg",
                           filename=f"c{i}.jpg", file_size=1))
     assert repo.count() == 5
+
+def test_update_blur_score(db_conn):
+    from app.db.photo_repository import PhotoRepository
+    from app.core.models import Photo
+    repo = PhotoRepository(db_conn)
+    photo = Photo(id=None, relative_path="a.jpg", filename="a.jpg", file_size=100)
+    pid = repo.insert(photo)
+    repo.update_blur_score(pid, 42.5)
+    p = repo.get_by_id(pid)
+    assert abs(p.blur_score - 42.5) < 0.001
+
+def test_blur_score_defaults_none(db_conn):
+    from app.db.photo_repository import PhotoRepository
+    from app.core.models import Photo
+    repo = PhotoRepository(db_conn)
+    photo = Photo(id=None, relative_path="b.jpg", filename="b.jpg", file_size=100)
+    pid = repo.insert(photo)
+    p = repo.get_by_id(pid)
+    assert p.blur_score is None
