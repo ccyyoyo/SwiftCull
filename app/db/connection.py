@@ -38,6 +38,6 @@ def init_db(conn: sqlite3.Connection) -> None:
     # Migration: add blur_score if absent (safe on existing DBs)
     try:
         conn.execute("ALTER TABLE photos ADD COLUMN blur_score REAL")
-    except Exception:
+    except sqlite3.OperationalError:
         pass  # column already exists
     conn.commit()

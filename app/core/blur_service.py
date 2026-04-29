@@ -29,9 +29,10 @@ class BlurService:
         return score < threshold
 
     def relative_threshold(self, scores: List[float], bottom_percent: float) -> float:
-        """Return the score value at the bottom_percent percentile."""
+        """Return threshold so photos at/below the bottom_percent percentile are blurry."""
         if not scores:
             return 0.0
         sorted_scores = sorted(scores)
-        idx = max(0, int(len(sorted_scores) * bottom_percent / 100.0))
-        return sorted_scores[min(idx, len(sorted_scores) - 1)]
+        idx = max(0, int(len(sorted_scores) * bottom_percent / 100.0) - 1)
+        # Add small epsilon so the boundary photo itself is classified as blurry
+        return sorted_scores[idx] + 1e-9
