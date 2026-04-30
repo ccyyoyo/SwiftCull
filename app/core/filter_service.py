@@ -14,11 +14,21 @@ class FilterService:
         statuses: Optional[List[str]] = None,
         colors: Optional[List[str]] = None,
         blur: Optional[List[str]] = None,
-        blur_threshold: float = 100.0,
+        blur_mode: str = "fixed",
+        blur_fixed_threshold: float = 100.0,
+        blur_relative_percent: float = 20.0,
     ) -> List[Photo]:
         all_photos = self._photos.get_all()
         if not statuses and not colors and not blur:
             return all_photos
+
+        # Compute effective threshold for blur filtering
+        effective_threshold = blur_fixed_threshold
+        if blur and blur_mode == "relative":
+            from app.core.blur_service import BlurService
+            scores = [p.blur_score for p in all_photos if p.blur_score is not None]
+            effective_threshold = BlurService().relative_threshold(scores, blur_relative_percent)
+
         result = []
         for photo in all_photos:
             tag = self._tags.get_by_photo_id(photo.id)
@@ -37,11 +47,14 @@ class FilterService:
 
             if blur:
                 score = photo.blur_score
-                if "unanalyzed" in blur and score is not None:
-                    continue
-                if "blurry" in blur and (score is None or score >= blur_threshold):
-                    continue
-                if "sharp" in blur and (score is None or score < blur_threshold):
+                passes = False
+                if "unanalyzed" in blur and score is None:
+                    passes = True
+                if "blurry" in blur and score is not None and score < effective_threshold:
+                    passes = True
+                if "sharp" in blur and score is not None and score >= effective_threshold:
+                    passes = True
+                if not passes:
                     continue
 
             result.append(photo)
