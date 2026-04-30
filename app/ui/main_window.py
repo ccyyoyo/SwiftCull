@@ -1,35 +1,10 @@
 import os
-import json
-from pathlib import Path
 from typing import Optional
 
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
 
+from app.db.settings_db import SettingsDB
 from app.ui.welcome_view import WelcomeView
-
-
-def _settings_path() -> Path:
-    app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
-    p = Path(app_data) / "SwiftCull"
-    p.mkdir(parents=True, exist_ok=True)
-    return p / "settings.json"
-
-
-def _load_settings() -> dict:
-    try:
-        return json.loads(_settings_path().read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _save_settings(data: dict) -> None:
-    try:
-        _settings_path().write_text(
-            json.dumps(data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
 
 
 class MainWindow(QMainWindow):
@@ -53,8 +28,8 @@ class MainWindow(QMainWindow):
         self._db_path: str = ""
         self._cache_dir: str = ""
 
-        settings = _load_settings()
-        last_folder = settings.get("last_folder", "")
+        self._settings = SettingsDB()
+        last_folder = self._settings.get("last_folder", "")
         if last_folder and os.path.isdir(last_folder):
             self._load_folder(last_folder)
 
@@ -86,7 +61,7 @@ class MainWindow(QMainWindow):
         tag_svc = TagService(tag_repo)
         filter_svc = FilterService(photo_repo, tag_repo)
 
-        _save_settings({"last_folder": folder_path})
+        self._settings.set("last_folder", folder_path)
 
         self._grid_view = GridView(
             folder_path, photo_repo, tag_repo,
@@ -204,4 +179,8 @@ class MainWindow(QMainWindow):
         if self._import_ctrl is not None:
             self._import_ctrl.cancel()
             self._import_ctrl.wait(3000)
+        try:
+            self._settings.close()
+        except Exception:
+            pass
         super().closeEvent(event)
