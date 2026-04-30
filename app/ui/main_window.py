@@ -3,6 +3,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
 
+from app.core.recent_projects import RecentProjects
 from app.db.settings_db import SettingsDB
 from app.ui.welcome_view import WelcomeView
 
@@ -16,6 +17,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._stack)
         self._welcome = WelcomeView()
         self._welcome.folder_selected.connect(self._on_folder_selected)
+        self._welcome.recent_remove_requested.connect(self._on_recent_remove)
         self._stack.addWidget(self._welcome)
         self._stack.setCurrentWidget(self._welcome)
 
@@ -29,12 +31,22 @@ class MainWindow(QMainWindow):
         self._cache_dir: str = ""
 
         self._settings = SettingsDB()
+        self._recent = RecentProjects(self._settings)
+        self._refresh_recent_view()
+
         last_folder = self._settings.get("last_folder", "")
         if last_folder and os.path.isdir(last_folder):
             self._load_folder(last_folder)
 
     def _on_folder_selected(self, folder_path: str):
         self._load_folder(folder_path)
+
+    def _on_recent_remove(self, folder_path: str):
+        self._recent.remove(folder_path)
+        self._refresh_recent_view()
+
+    def _refresh_recent_view(self):
+        self._welcome.set_recent_projects(self._recent.list_all())
 
     def _load_folder(self, folder_path: str):
         from app.db.connection import get_connection, init_db
@@ -62,6 +74,8 @@ class MainWindow(QMainWindow):
         filter_svc = FilterService(photo_repo, tag_repo)
 
         self._settings.set("last_folder", folder_path)
+        self._recent.add(folder_path)
+        self._refresh_recent_view()
 
         self._grid_view = GridView(
             folder_path, photo_repo, tag_repo,
