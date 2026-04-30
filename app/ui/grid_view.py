@@ -313,8 +313,17 @@ class GridView(QWidget):
         loupe = LoupeView(
             photo_ids, photo_ids.index(photo_id),
             self._folder, self._photo_repo,
-            self._tag_repo, self._tag_svc
+            self._tag_repo, self._tag_svc,
+            filter_svc=self._filter_svc,
+            initial_statuses=self._current_statuses,
+            initial_colors=self._current_colors,
         )
         loupe.tag_changed.connect(self._grid.update_item_tag)
+        loupe.filter_changed.connect(self._on_loupe_filter_changed)
         loupe.showFullScreen()
         loupe.closed.connect(loupe.deleteLater)
+
+    def _on_loupe_filter_changed(self, statuses: list, colors: list):
+        """Filter changes inside Loupe propagate back to the grid + panel."""
+        self._filter_panel.set_filter(statuses, colors)
+        self._refresh(statuses or None, colors or None)

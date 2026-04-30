@@ -283,6 +283,8 @@ class FilterPanel(QWidget):
             self._collapsed_tab.show()
 
     def _emit_filter(self):
+        if getattr(self, "_suppress", False):
+            return
         statuses = [s for s, cb in self._status_checks.items() if cb.isChecked()]
         colors = [c for c, cb in self._color_checks.items() if cb.isChecked()]
         self.filter_changed.emit(statuses, colors)
@@ -290,3 +292,17 @@ class FilterPanel(QWidget):
     def _clear_all(self):
         for cb in list(self._status_checks.values()) + list(self._color_checks.values()):
             cb.setChecked(False)
+
+    def set_filter(self, statuses, colors):
+        """Programmatically reflect external filter changes (e.g. from Loupe)
+        without re-emitting filter_changed back to the caller."""
+        wanted_s = set(statuses or [])
+        wanted_c = set(colors or [])
+        self._suppress = True
+        try:
+            for s, cb in self._status_checks.items():
+                cb.setChecked(s in wanted_s)
+            for c, cb in self._color_checks.items():
+                cb.setChecked(c in wanted_c)
+        finally:
+            self._suppress = False
