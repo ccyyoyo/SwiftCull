@@ -30,14 +30,21 @@ class ImportService:
             relative_path=relative_path,
             filename=os.path.basename(relative_path),
             file_size=os.path.getsize(abs_path),
+            mtime=os.path.getmtime(abs_path),
         )
 
     def enrich_photo(self, root_path: str, relative_path: str) -> dict:
-        """Expensive: open image for dimensions and parse EXIF. Run in worker thread."""
+        """Expensive: open image for dimensions and parse EXIF. Run in worker thread.
+
+        Also re-captures `file_size` and `mtime` so that callers refreshing an
+        existing row pick up post-modification values in a single round-trip.
+        """
         abs_path = os.path.join(root_path, relative_path)
         width, height = self._get_dimensions(abs_path)
         exif = self._read_exif(abs_path)
         return {
+            "file_size": os.path.getsize(abs_path),
+            "mtime": os.path.getmtime(abs_path),
             "width": width,
             "height": height,
             "shot_at": exif.get("shot_at"),

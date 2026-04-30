@@ -70,3 +70,42 @@ def test_count_returns_row_total(db_conn):
         repo.insert(Photo(id=None, relative_path=f"c{i}.jpg",
                           filename=f"c{i}.jpg", file_size=1))
     assert repo.count() == 5
+
+
+def test_insert_persists_mtime(db_conn):
+    repo = PhotoRepository(db_conn)
+    photo_id = repo.insert(Photo(
+        id=None, relative_path="t.jpg", filename="t.jpg",
+        file_size=1, mtime=1700000000.5,
+    ))
+    photo = repo.get_by_id(photo_id)
+    assert photo.mtime == 1700000000.5
+
+
+def test_update_metadata_can_update_mtime_and_size(db_conn):
+    repo = PhotoRepository(db_conn)
+    photo_id = repo.insert(Photo(
+        id=None, relative_path="u.jpg", filename="u.jpg",
+        file_size=1, mtime=1.0,
+    ))
+    repo.update_metadata(photo_id, {"mtime": 2.0, "file_size": 999})
+    photo = repo.get_by_id(photo_id)
+    assert photo.mtime == 2.0
+    assert photo.file_size == 999
+
+
+def test_get_path_mtime_map(db_conn):
+    repo = PhotoRepository(db_conn)
+    repo.insert(Photo(id=None, relative_path="m1.jpg", filename="m1.jpg",
+                      file_size=1, mtime=10.0))
+    repo.insert(Photo(id=None, relative_path="m2.jpg", filename="m2.jpg",
+                      file_size=1, mtime=20.0))
+    repo.insert(Photo(id=None, relative_path="m3.jpg", filename="m3.jpg",
+                      file_size=1))  # mtime defaults to None
+    m = repo.get_path_mtime_map()
+    assert m == {"m1.jpg": 10.0, "m2.jpg": 20.0, "m3.jpg": None}
+
+
+def test_get_path_mtime_map_empty_db(db_conn):
+    repo = PhotoRepository(db_conn)
+    assert repo.get_path_mtime_map() == {}

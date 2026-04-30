@@ -56,3 +56,30 @@ def test_enrich_photo_returns_dimensions(tmp_path):
     assert meta["width"] == 100
     assert meta["height"] == 80
     assert "shot_at" in meta
+
+
+def test_build_photo_minimal_captures_mtime(tmp_path):
+    p = tmp_path / "mt.jpg"
+    _make_jpeg(p)
+    expected_mtime = os.path.getmtime(p)
+    svc = ImportService()
+    photo = svc.build_photo_minimal(str(tmp_path), "mt.jpg")
+    assert photo.mtime == expected_mtime
+
+
+def test_enrich_photo_returns_mtime_and_size(tmp_path):
+    p = tmp_path / "es.jpg"
+    _make_jpeg(p)
+    svc = ImportService()
+    meta = svc.enrich_photo(str(tmp_path), "es.jpg")
+    assert meta["mtime"] == os.path.getmtime(p)
+    assert meta["file_size"] == os.path.getsize(p)
+
+
+def test_build_photo_full_includes_mtime(tmp_path):
+    p = tmp_path / "full.jpg"
+    _make_jpeg(p)
+    svc = ImportService()
+    photo = svc.build_photo(str(tmp_path), "full.jpg")
+    assert photo.mtime == os.path.getmtime(p)
+    assert photo.width == 100

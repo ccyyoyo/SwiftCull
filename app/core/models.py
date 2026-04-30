@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 @dataclass
@@ -7,6 +7,7 @@ class Photo:
     relative_path: str
     filename: str
     file_size: int
+    mtime: Optional[float] = None
     shot_at: Optional[str] = None
     imported_at: Optional[str] = None
     width: Optional[int] = None

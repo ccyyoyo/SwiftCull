@@ -11,11 +11,11 @@ class PhotoRepository:
         now = datetime.now(timezone.utc).isoformat()
         cur = self._conn.execute(
             """INSERT INTO photos
-               (relative_path, filename, file_size, shot_at, imported_at,
+               (relative_path, filename, file_size, mtime, shot_at, imported_at,
                 width, height, camera_model, lens_model, iso, aperture,
                 shutter_speed, focal_length)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (photo.relative_path, photo.filename, photo.file_size,
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (photo.relative_path, photo.filename, photo.file_size, photo.mtime,
              photo.shot_at, now, photo.width, photo.height,
              photo.camera_model, photo.lens_model, photo.iso,
              photo.aperture, photo.shutter_speed, photo.focal_length)
@@ -36,10 +36,11 @@ class PhotoRepository:
         return int(row["id"]) if row else None
 
     def update_metadata(self, photo_id: int, fields: dict) -> None:
-        """Partial UPDATE of EXIF/dimension fields. Ignores unknown columns."""
+        """Partial UPDATE of EXIF/dimension/file fields. Ignores unknown columns."""
         allowed = {
             "shot_at", "width", "height", "camera_model", "lens_model",
             "iso", "aperture", "shutter_speed", "focal_length",
+            "file_size", "mtime",
         }
         clean = {k: v for k, v in fields.items() if k in allowed}
         if not clean:
@@ -50,6 +51,13 @@ class PhotoRepository:
             (*clean.values(), photo_id),
         )
         self._conn.commit()
+
+    def get_path_mtime_map(self) -> dict[str, Optional[float]]:
+        """Cheap fetch for scan comparisons: relative_path -> mtime."""
+        rows = self._conn.execute(
+            "SELECT relative_path, mtime FROM photos"
+        ).fetchall()
+        return {r["relative_path"]: r["mtime"] for r in rows}
 
     def get_all(self) -> List[Photo]:
         rows = self._conn.execute(
@@ -62,11 +70,13 @@ class PhotoRepository:
         return int(row["n"]) if row else 0
 
     def _row_to_photo(self, row) -> Photo:
+        keys = row.keys()
         return Photo(
             id=row["id"],
             relative_path=row["relative_path"],
             filename=row["filename"],
             file_size=row["file_size"],
+            mtime=row["mtime"] if "mtime" in keys else None,
             shot_at=row["shot_at"],
             imported_at=row["imported_at"],
             width=row["width"],
