@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap, QKeyEvent, QWheelEvent
 from PySide6.QtCore import Signal, Qt, QTimer
 
+from app.core.preview_loader import load_preview_bytes
+
 COLORS = ["red", "orange", "yellow", "green", "blue", "purple"]
 COLOR_HEX = {
     "red": "#FF4444", "orange": "#FF8800", "yellow": "#FFDD00",
@@ -133,9 +135,24 @@ class LoupeView(QWidget):
         photo_id = self._ids[self._idx]
         photo = self._photo_repo.get_by_id(photo_id)
         abs_path = os.path.join(self._folder, photo.relative_path)
-        self._base_pixmap = QPixmap(abs_path)
-        self._apply_zoom()
+        self._base_pixmap = self._load_pixmap(abs_path)
+        if self._base_pixmap is None or self._base_pixmap.isNull():
+            self._img_label.clear()
+            self._img_label.setText("無法載入預覽")
+            self._img_label.setStyleSheet(
+                "background: black; color: #888; font-size: 14px;"
+            )
+        else:
+            self._img_label.setStyleSheet("background: black;")
+            self._apply_zoom()
         self._update_status_label()
+
+    def _load_pixmap(self, abs_path: str) -> QPixmap:
+        data = load_preview_bytes(abs_path)
+        pix = QPixmap()
+        if data:
+            pix.loadFromData(data)
+        return pix
 
     def _apply_zoom(self):
         if self._base_pixmap is None or self._base_pixmap.isNull():
