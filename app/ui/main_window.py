@@ -82,6 +82,7 @@ class MainWindow(QMainWindow):
             thumb_svc, tag_svc, filter_svc,
         )
         self._grid_view.refresh_requested.connect(self._on_refresh_requested)
+        self._grid_view.import_cancel_requested.connect(self._on_import_cancel_requested)
         self._stack.addWidget(self._grid_view)
         self._stack.setCurrentWidget(self._grid_view)
 
@@ -202,6 +203,10 @@ class MainWindow(QMainWindow):
         # Manual "重新掃描" button: re-run the scan, but always notify (toast)
         # so the user keeps control over whether to import.
         self._start_scan()
+
+    def _on_import_cancel_requested(self):
+        if self._import_ctrl is not None:
+            self._import_ctrl.cancel()
 
     def _on_import_finished(self):
         if self._grid_view is not None:
