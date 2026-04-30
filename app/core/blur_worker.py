@@ -47,8 +47,9 @@ class BlurWorker(QObject):
                     continue
                 try:
                     score = svc.compute_score(self._folder, photo.relative_path)
-                    repo.update_blur_score(photo_id, score)
-                    self.photo_blur_updated.emit(photo_id, score)
+                    if score is not None:
+                        repo.update_blur_score(photo_id, score)
+                        self.photo_blur_updated.emit(photo_id, score)
                 except Exception:
                     pass
                 self.progress.emit(i + 1, total)

@@ -66,3 +66,19 @@ def test_classify_relative(tmp_path):
     threshold = svc.relative_threshold(scores, bottom_percent=50)
     assert svc.is_blurry_fixed(scores[0], threshold) is True
     assert svc.is_blurry_fixed(scores[1], threshold) is False
+
+
+def test_compute_score_returns_none_for_missing_file(tmp_path):
+    from app.core.blur_service import BlurService
+    svc = BlurService()
+    result = svc.compute_score(str(tmp_path), "nonexistent.jpg")
+    assert result is None
+
+def test_compute_score_returns_none_for_unreadable_raw(tmp_path):
+    from app.core.blur_service import BlurService
+    # Write a file that is not a valid image
+    p = tmp_path / "shot.CR2"
+    p.write_bytes(b"not a real raw file")
+    svc = BlurService()
+    result = svc.compute_score(str(tmp_path), "shot.CR2")
+    assert result is None
