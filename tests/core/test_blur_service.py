@@ -74,6 +74,7 @@ def test_compute_score_returns_none_for_missing_file(tmp_path):
     result = svc.compute_score(str(tmp_path), "nonexistent.jpg")
     assert result is None
 
+
 def test_compute_score_returns_none_for_unreadable_raw(tmp_path):
     from app.core.blur_service import BlurService
     # Write a file that is not a valid image
