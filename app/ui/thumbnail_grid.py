@@ -183,6 +183,14 @@ class ThumbnailGrid(QWidget):
         self._items[photo_id].set_status(tag.status if tag else None)
         self._items[photo_id].set_color(tag.color if tag else None)
 
+    def refresh_item_thumbnail(self, photo_id: int):
+        """Force re-fetch of a single tile's thumbnail (e.g. after modify)."""
+        item = self._items.get(photo_id)
+        if item is None:
+            return
+        item.reset_thumb()
+        self._scroll_debounce.start()
+
     def _on_item_selection(self, photo_id: int, modifier: str):
         photo_ids = [p.id for p in self._photos]
         clicked_idx = photo_ids.index(photo_id) if photo_id in photo_ids else -1

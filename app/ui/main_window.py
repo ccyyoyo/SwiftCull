@@ -1,7 +1,10 @@
 import os
 import json
 from pathlib import Path
+from typing import Optional
+
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
+
 from app.ui.welcome_view import WelcomeView
 
 
@@ -42,10 +45,13 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentWidget(self._welcome)
 
         self._import_ctrl = None
+        self._scan_ctrl = None
+        self._toast = None
         self._grid_view = None
         self._photo_repo = None
         self._folder_path: str = ""
         self._db_path: str = ""
+        self._cache_dir: str = ""
 
         settings = _load_settings()
         last_folder = settings.get("last_folder", "")
@@ -93,39 +99,98 @@ class MainWindow(QMainWindow):
         self._photo_repo = photo_repo
         self._folder_path = folder_path
         self._db_path = db_path
+        self._cache_dir = cache_dir
 
-        disk_count = len(ImportService().scan_folder(folder_path))
-        db_count = photo_repo.count()
-        if disk_count == db_count:
+        # Decide what to do on open:
+        #   * Empty DB (first-time import) -> import everything immediately.
+        #   * Non-empty DB (re-open) -> background scan, then toast if changes.
+        if photo_repo.count() == 0:
+            new_paths = ImportService().scan_folder(folder_path)
+            if new_paths:
+                self._start_import(new_paths=new_paths, modified_paths=[])
+        else:
+            self._start_scan()
+
+    # ---- scan ----------------------------------------------------------
+
+    def _start_scan(self):
+        from app.core.scan_worker import ScanController
+        if self._scan_ctrl is not None:
             return
+        if not self._folder_path or not self._db_path:
+            return
+        self._dismiss_toast()
+        self._scan_ctrl = ScanController(self._folder_path, self._db_path)
+        self._scan_ctrl.finished.connect(self._on_scan_finished)
+        self._scan_ctrl.start()
 
-        self._start_import()
+    def _on_scan_finished(self, result):
+        self._scan_ctrl = None
+        if self._grid_view is not None:
+            self._grid_view.scan_finished()
+        if result is None or not result.has_changes:
+            return
+        if self._grid_view is None:
+            return
+        from app.ui.toast import show_scan_toast
+        new_paths = list(result.new_paths)
+        modified_paths = list(result.modified_paths)
+        self._dismiss_toast()
+        self._toast = show_scan_toast(
+            self._grid_view,
+            len(new_paths),
+            len(modified_paths),
+            on_confirm=lambda: self._on_toast_confirmed(new_paths, modified_paths),
+            on_dismiss=self._on_toast_dismissed,
+        )
 
-    def _start_import(self):
+    def _dismiss_toast(self):
+        if self._toast is not None:
+            self._toast.hide()
+            self._toast.deleteLater()
+            self._toast = None
+
+    def _on_toast_confirmed(self, new_paths, modified_paths):
+        self._toast = None
+        self._start_import(new_paths=new_paths, modified_paths=modified_paths)
+
+    def _on_toast_dismissed(self):
+        self._toast = None
+
+    # ---- import --------------------------------------------------------
+
+    def _start_import(self, new_paths: list, modified_paths: list):
         from app.core.import_worker import ImportController
         if self._import_ctrl is not None:
             return
         if self._grid_view is None or not self._folder_path or not self._db_path:
             return
+        if not new_paths and not modified_paths:
+            return
         self._grid_view.clear_import_errors()
-        self._import_ctrl = ImportController(self._folder_path, self._db_path)
-        self._import_ctrl.scanned.connect(self._on_scanned)
+        total = len(new_paths) + len(modified_paths)
+        self._grid_view.begin_import(total)
+        self._import_ctrl = ImportController(
+            self._folder_path, self._db_path,
+            new_paths=new_paths,
+            modified_paths=modified_paths,
+            cache_dir=self._cache_dir,
+        )
         self._import_ctrl.photo_imported.connect(self._grid_view.on_photo_imported)
+        self._import_ctrl.photo_updated.connect(self._on_photo_updated)
         self._import_ctrl.progress.connect(self._grid_view.update_import_progress)
         self._import_ctrl.error.connect(self._grid_view.add_import_error)
         self._import_ctrl.finished.connect(self._on_import_finished)
         self._import_ctrl.start()
 
-    def _on_refresh_requested(self):
-        self._start_import()
+    def _on_photo_updated(self, photo_id: int):
+        if self._grid_view is not None:
+            self._grid_view.on_photo_updated(photo_id)
 
-    def _on_scanned(self, total: int):
-        if self._grid_view is None:
-            return
-        if total == 0:
-            self._grid_view.end_import()
-            return
-        self._grid_view.begin_import(total)
+    def _on_refresh_requested(self):
+        # Manual "重新掃描" button: re-run the scan, but always notify (toast)
+        # so the user keeps control over whether to import.
+        self._start_scan()
 
     def _on_import_finished(self):
         if self._grid_view is not None:
@@ -133,6 +198,9 @@ class MainWindow(QMainWindow):
         self._import_ctrl = None
 
     def closeEvent(self, event):
+        self._dismiss_toast()
+        if self._scan_ctrl is not None:
+            self._scan_ctrl.wait(2000)
         if self._import_ctrl is not None:
             self._import_ctrl.cancel()
             self._import_ctrl.wait(3000)

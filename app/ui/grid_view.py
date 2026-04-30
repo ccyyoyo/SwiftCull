@@ -121,7 +121,7 @@ class GridView(QWidget):
 
         self._refresh_btn = QPushButton("↻  重新掃描")
         self._refresh_btn.setCursor(Qt.PointingHandCursor)
-        self._refresh_btn.setToolTip("重新掃描資料夾，匯入新增的照片")
+        self._refresh_btn.setToolTip("重新掃描資料夾，找出新增 / 修改的檔案")
         self._refresh_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
             f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
@@ -229,6 +229,13 @@ class GridView(QWidget):
         self._import_label.hide()
         self._refresh_btn.setEnabled(True)
 
+    def scan_finished(self):
+        """Called after a background scan completes regardless of outcome.
+        Re-enables the refresh button if no import has taken its place."""
+        if self._import_progress.isVisible():
+            return  # an import is in flight; end_import will re-enable later
+        self._refresh_btn.setEnabled(True)
+
     def _on_refresh_clicked(self):
         self._refresh_btn.setEnabled(False)
         self.clear_import_errors()
@@ -238,6 +245,11 @@ class GridView(QWidget):
         if self._current_statuses or self._current_colors:
             return
         self._grid.add_photo(photo)
+
+    def on_photo_updated(self, photo_id: int):
+        """A modified file just had its metadata refreshed; force the
+        thumbnail to regenerate from the new on-disk content."""
+        self._grid.refresh_item_thumbnail(photo_id)
 
     def add_import_error(self, rel_path: str, reason: str):
         self._import_errors.append((rel_path, reason))
