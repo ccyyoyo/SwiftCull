@@ -58,6 +58,19 @@ class PhotoRepository:
         )
         self._conn.commit()
 
+    def update_exposure_scores(
+        self,
+        photo_id: int,
+        mean_brightness: float,
+        overexposed_fraction: float,
+        underexposed_fraction: float,
+    ) -> None:
+        self._conn.execute(
+            "UPDATE photos SET exposure_mean=?, exposure_overexposed=?, exposure_underexposed=? WHERE id=?",
+            (mean_brightness, overexposed_fraction, underexposed_fraction, photo_id),
+        )
+        self._conn.commit()
+
     def get_path_mtime_map(self) -> dict[str, Optional[float]]:
         """Cheap fetch for scan comparisons: relative_path -> mtime."""
         rows = self._conn.execute(
@@ -94,4 +107,7 @@ class PhotoRepository:
             shutter_speed=row["shutter_speed"],
             focal_length=row["focal_length"],
             blur_score=row["blur_score"] if "blur_score" in row.keys() else None,
+            exposure_mean=row["exposure_mean"] if "exposure_mean" in row.keys() else None,
+            exposure_overexposed=row["exposure_overexposed"] if "exposure_overexposed" in row.keys() else None,
+            exposure_underexposed=row["exposure_underexposed"] if "exposure_underexposed" in row.keys() else None,
         )

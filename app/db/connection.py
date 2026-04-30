@@ -53,3 +53,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE photos ADD COLUMN mtime REAL")
     if "blur_score" not in cols:
         conn.execute("ALTER TABLE photos ADD COLUMN blur_score REAL")
+    if "exposure_mean" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN exposure_mean REAL")
+    if "exposure_overexposed" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN exposure_overexposed REAL")
+    if "exposure_underexposed" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN exposure_underexposed REAL")
