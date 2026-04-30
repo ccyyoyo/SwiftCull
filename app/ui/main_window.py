@@ -117,21 +117,43 @@ class MainWindow(QMainWindow):
         self._scan_ctrl = None
         if self._grid_view is not None:
             self._grid_view.scan_finished()
+            # Always sync the missing-file overlay even when there are no
+            # actionable changes, so a returning user immediately sees that
+            # files vanished without being prompted to "import" anything.
+            missing = list(result.missing_paths) if result is not None else []
+            self._grid_view.set_missing_paths(missing)
+
         if result is None or not result.has_changes:
             return
         if self._grid_view is None:
             return
+
         from app.ui.toast import show_scan_toast
         new_paths = list(result.new_paths)
         modified_paths = list(result.modified_paths)
+        missing_paths = list(result.missing_paths)
         self._dismiss_toast()
-        self._toast = show_scan_toast(
-            self._grid_view,
-            len(new_paths),
-            len(modified_paths),
-            on_confirm=lambda: self._on_toast_confirmed(new_paths, modified_paths),
-            on_dismiss=self._on_toast_dismissed,
-        )
+
+        if result.has_actionable_changes:
+            self._toast = show_scan_toast(
+                self._grid_view,
+                len(new_paths),
+                len(modified_paths),
+                missing_count=len(missing_paths),
+                on_confirm=lambda: self._on_toast_confirmed(
+                    new_paths, modified_paths
+                ),
+                on_dismiss=self._on_toast_dismissed,
+            )
+        else:
+            from app.ui.toast import show_info_toast
+            self._toast = show_info_toast(
+                self._grid_view,
+                len(new_paths),
+                len(modified_paths),
+                len(missing_paths),
+                on_dismiss=self._on_toast_dismissed,
+            )
 
     def _dismiss_toast(self):
         if self._toast is not None:

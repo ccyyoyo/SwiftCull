@@ -276,6 +276,22 @@ class LoupeView(QWidget):
         photo_id = self._ids[self._idx]
         photo = self._photo_repo.get_by_id(photo_id)
         abs_path = os.path.join(self._folder, photo.relative_path)
+
+        if not os.path.exists(abs_path):
+            self._base_pixmap = None
+            self._img_label.clear()
+            self._img_label.setText(
+                "✕ 原檔不存在\n\n"
+                f"{photo.relative_path}\n\n"
+                "請檢查檔案是否被移動或刪除"
+            )
+            self._img_label.setStyleSheet(
+                "background: black; color: #c66; font-size: 14px;"
+                " padding: 24px;"
+            )
+            self._update_status_label()
+            return
+
         self._base_pixmap = self._load_pixmap(abs_path)
         if self._base_pixmap is None or self._base_pixmap.isNull():
             self._img_label.clear()

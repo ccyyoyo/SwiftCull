@@ -145,15 +145,37 @@ def show_scan_toast(
     modified_count: int,
     on_confirm: Callable[[], None],
     on_dismiss: Optional[Callable[[], None]] = None,
+    missing_count: int = 0,
 ) -> Toast:
     """Convenience: build a toast for "N new / M modified" scan results."""
     toast = Toast(
         parent,
-        format_scan_message(new_count, modified_count),
+        format_scan_message(new_count, modified_count, missing_count),
         confirm_label="匯入",
         dismiss_label="忽略",
         on_confirm=on_confirm,
         on_dismiss=on_dismiss,
+    )
+    toast.show_at_corner()
+    return toast
+
+
+def show_info_toast(
+    parent: QWidget,
+    new_count: int,
+    modified_count: int,
+    missing_count: int,
+    on_dismiss: Optional[Callable[[], None]] = None,
+) -> Toast:
+    """Informational-only toast (no '匯入' button) — used when the only
+    scan finding is missing files, which we don't auto-import."""
+    toast = Toast(
+        parent,
+        format_scan_message(new_count, modified_count, missing_count),
+        confirm_label=None,
+        dismiss_label="知道了",
+        on_dismiss=on_dismiss,
+        auto_dismiss_ms=8000,
     )
     toast.show_at_corner()
     return toast

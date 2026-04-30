@@ -70,8 +70,7 @@ def test_legacy_row_with_null_mtime_is_not_flagged(tmp_path):
     assert result.new_paths == []
 
 
-def test_db_row_for_missing_file_is_ignored(tmp_path):
-    """Files in DB but no longer on disk are out of scope for this service."""
+def test_db_row_for_missing_file_is_reported(tmp_path):
     _make_jpeg(tmp_path / "present.jpg")
     db = {
         "present.jpg": os.path.getmtime(tmp_path / "present.jpg"),
@@ -81,23 +80,38 @@ def test_db_row_for_missing_file_is_ignored(tmp_path):
     result = svc.scan(str(tmp_path), db)
     assert result.new_paths == []
     assert result.modified_paths == []
+    assert result.missing_paths == ["vanished.jpg"]
+    assert result.has_changes is True
+    assert result.has_actionable_changes is False
 
 
-def test_mixed_new_and_modified(tmp_path):
+def test_missing_paths_only_changes_total_not_actionable(tmp_path):
+    db = {"a.jpg": 1.0, "b.jpg": 2.0}
+    svc = ScanService()
+    result = svc.scan(str(tmp_path), db)
+    assert sorted(result.missing_paths) == ["a.jpg", "b.jpg"]
+    assert result.has_changes is True
+    assert result.has_actionable_changes is False
+
+
+def test_mixed_new_modified_and_missing(tmp_path):
     p1 = tmp_path / "old.jpg"
     p2 = tmp_path / "fresh.jpg"
     _make_jpeg(p1)
     _make_jpeg(p2)
-    db = {"old.jpg": os.path.getmtime(p1) - 100.0}
+    db = {"old.jpg": os.path.getmtime(p1) - 100.0, "gone.jpg": 9.0}
     svc = ScanService()
     result = svc.scan(str(tmp_path), db)
     assert result.new_paths == ["fresh.jpg"]
     assert result.modified_paths == ["old.jpg"]
-    assert result.total == 2
+    assert result.missing_paths == ["gone.jpg"]
+    assert result.total == 3
+    assert result.has_actionable_changes is True
 
 
 def test_scan_result_is_immutable_dataclass():
-    r = ScanResult(new_paths=["a"], modified_paths=["b"])
+    r = ScanResult(new_paths=["a"], modified_paths=["b"], missing_paths=["c"])
     assert r.new_paths == ["a"]
     assert r.modified_paths == ["b"]
-    assert r.total == 2
+    assert r.missing_paths == ["c"]
+    assert r.total == 3

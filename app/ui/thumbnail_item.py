@@ -23,6 +23,7 @@ class ThumbnailItem(QWidget):
         self._filename = filename
         self._pixmap: QPixmap | None = None
         self._thumb_requested = False
+        self._missing = False
 
         self._label_h = 20
         self.setFixedSize(size + 4, size + 4 + self._label_h)
@@ -63,6 +64,19 @@ class ThumbnailItem(QWidget):
         self._color = color
         self.update()
 
+    def set_missing(self, missing: bool):
+        if self._missing == missing:
+            return
+        self._missing = missing
+        if missing:
+            self.setToolTip("原檔不存在")
+        else:
+            self.setToolTip("")
+        self.update()
+
+    def is_missing(self) -> bool:
+        return self._missing
+
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -85,13 +99,33 @@ class ThumbnailItem(QWidget):
             p.drawText(QRect(0, 0, w, img_zone_h),
                        Qt.AlignCenter, "·")
 
+        # missing-file dim overlay sits *above* the thumbnail but *below*
+        # the filename row so the name stays legible.
+        if self._missing:
+            p.fillRect(2, 2, w - 4, img_zone_h - 4, QColor(0, 0, 0, 140))
+
         # filename label area at bottom — always visible
         p.fillRect(0, img_zone_h, w, self._label_h, QColor(0, 0, 0, 180))
-        p.setPen(QColor("#aaaaaa"))
+        label_color = "#777777" if self._missing else "#aaaaaa"
+        p.setPen(QColor(label_color))
         font = QFont("Segoe UI", 8)
         p.setFont(font)
         p.drawText(QRect(4, img_zone_h, w - 8, self._label_h),
                    Qt.AlignVCenter | Qt.AlignLeft, self._filename)
+
+        # missing badge — a small red pill across the top edge
+        if self._missing:
+            badge_h = 18
+            badge_w = min(74, w - 12)
+            bx = (w - badge_w) // 2
+            by = max(4, img_zone_h // 2 - badge_h // 2)
+            p.setBrush(QColor(170, 50, 50, 220))
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(bx, by, badge_w, badge_h, 4, 4)
+            p.setPen(QColor("#ffffff"))
+            p.setFont(QFont("Segoe UI", 8, QFont.Bold))
+            p.drawText(QRect(bx, by, badge_w, badge_h),
+                       Qt.AlignCenter, "✕ 找不到原檔")
 
         # status badge — bottom-right circle with icon
         if self._status and self._status in STATUS_ICON:

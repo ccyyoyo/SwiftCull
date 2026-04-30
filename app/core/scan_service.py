@@ -24,14 +24,24 @@ _MTIME_EPSILON = 1.0
 class ScanResult:
     new_paths: list[str] = field(default_factory=list)
     modified_paths: list[str] = field(default_factory=list)
+    missing_paths: list[str] = field(default_factory=list)
 
     @property
     def total(self) -> int:
-        return len(self.new_paths) + len(self.modified_paths)
+        return (len(self.new_paths)
+                + len(self.modified_paths)
+                + len(self.missing_paths))
 
     @property
     def has_changes(self) -> bool:
         return self.total > 0
+
+    @property
+    def has_actionable_changes(self) -> bool:
+        """`missing_paths` is informational only — we don't auto-import in
+        response to it. Use this when deciding whether to surface an import
+        prompt vs. just a passive notice."""
+        return len(self.new_paths) > 0 or len(self.modified_paths) > 0
 
 
 class ScanService:
@@ -57,9 +67,10 @@ class ScanService:
         disk_paths: Iterable[str],
         db_path_mtime: Mapping[str, Optional[float]],
     ) -> ScanResult:
+        disk_paths_set = set(disk_paths)
         new_paths: list[str] = []
         modified_paths: list[str] = []
-        for rel in disk_paths:
+        for rel in disk_paths_set:
             if rel not in db_path_mtime:
                 new_paths.append(rel)
                 continue
@@ -73,7 +84,15 @@ class ScanService:
                 continue
             if disk_mtime - db_mtime > self._epsilon:
                 modified_paths.append(rel)
-        return ScanResult(new_paths=new_paths, modified_paths=modified_paths)
+
+        missing_paths = sorted(
+            rel for rel in db_path_mtime.keys() if rel not in disk_paths_set
+        )
+        return ScanResult(
+            new_paths=sorted(new_paths),
+            modified_paths=sorted(modified_paths),
+            missing_paths=missing_paths,
+        )
 
     @staticmethod
     def _safe_mtime(folder_path: str, relative_path: str) -> Optional[float]:

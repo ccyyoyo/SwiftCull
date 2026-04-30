@@ -251,6 +251,10 @@ class GridView(QWidget):
         thumbnail to regenerate from the new on-disk content."""
         self._grid.refresh_item_thumbnail(photo_id)
 
+    def set_missing_paths(self, missing_relative_paths):
+        """Sync the 'original file missing' overlay across all visible tiles."""
+        self._grid.mark_missing(missing_relative_paths)
+
     def add_import_error(self, rel_path: str, reason: str):
         self._import_errors.append((rel_path, reason))
         self._refresh_error_indicator()

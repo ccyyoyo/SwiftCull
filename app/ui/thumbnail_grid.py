@@ -242,6 +242,25 @@ class ThumbnailGrid(QWidget):
         item.reset_thumb()
         self._scroll_debounce.start()
 
+    def mark_missing(self, missing_relative_paths) -> int:
+        """Apply the 'original file missing' visual state to matching items.
+
+        Items currently shown but not in the list have their missing flag
+        cleared (e.g. a previously-missing file came back). Returns the
+        number of items now flagged missing.
+        """
+        wanted = set(missing_relative_paths or [])
+        flagged = 0
+        for pid, photo in self._photo_by_id.items():
+            item = self._items.get(pid)
+            if item is None:
+                continue
+            is_missing = photo.relative_path in wanted
+            item.set_missing(is_missing)
+            if is_missing:
+                flagged += 1
+        return flagged
+
     # ---- rubber-band selection -----------------------------------------
 
     def _on_band_pressed(self, pos: QPoint, modifiers):
