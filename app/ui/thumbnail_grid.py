@@ -296,6 +296,10 @@ class ThumbnailGrid(QWidget):
             elif key == Qt.Key_M:
                 self.batch_status_requested.emit(selected_list, "maybe")
                 return
+            elif key == Qt.Key_U:
+                # "clear" is a sentinel that GridView dispatches to clear_status
+                self.batch_status_requested.emit(selected_list, "clear")
+                return
         if key == Qt.Key_Space and len(self._selected) == 1:
             self.photo_double_clicked.emit(list(self._selected)[0])
             return

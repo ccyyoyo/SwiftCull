@@ -35,3 +35,9 @@ class TagService:
             tag = self._repo.get_by_photo_id(pid) or Tag(photo_id=pid)
             tag.status = status
             self._repo.upsert(tag)
+
+    def batch_clear_status(self, photo_ids: List[int]) -> None:
+        for pid in photo_ids:
+            tag = self._repo.get_by_photo_id(pid) or Tag(photo_id=pid)
+            tag.status = None
+            self._repo.upsert(tag)

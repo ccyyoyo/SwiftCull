@@ -294,7 +294,10 @@ class GridView(QWidget):
         if len(photo_ids) > 1:
             if not confirm_batch(len(photo_ids), status, self):
                 return
-        self._tag_svc.batch_set_status(photo_ids, status)
+        if status == "clear":
+            self._tag_svc.batch_clear_status(photo_ids)
+        else:
+            self._tag_svc.batch_set_status(photo_ids, status)
         for pid in photo_ids:
             self._grid.update_item_tag(pid)
 

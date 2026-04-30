@@ -69,6 +69,12 @@ class LoupeView(QWidget):
             btn.clicked.connect(lambda checked, s=status: self._set_status(s))
             tb_layout.addWidget(btn)
 
+        clear_status_btn = QPushButton("U  清除")
+        clear_status_btn.setStyleSheet("color: white; background: #444; padding: 6px 12px;")
+        clear_status_btn.setToolTip("清除標記 (U)")
+        clear_status_btn.clicked.connect(self._clear_status)
+        tb_layout.addWidget(clear_status_btn)
+
         tb_layout.addSpacing(16)
 
         # color buttons
@@ -195,6 +201,12 @@ class LoupeView(QWidget):
         self._update_status_label()
         self.tag_changed.emit(photo_id)
 
+    def _clear_status(self):
+        photo_id = self._ids[self._idx]
+        self._tag_svc.clear_status(photo_id)
+        self._update_status_label()
+        self.tag_changed.emit(photo_id)
+
     def _set_color(self, color):
         photo_id = self._ids[self._idx]
         self._tag_svc.set_color(photo_id, color)
@@ -209,6 +221,8 @@ class LoupeView(QWidget):
             self._set_status("reject")
         elif key == Qt.Key_M:
             self._set_status("maybe")
+        elif key == Qt.Key_U:
+            self._clear_status()
         elif key == Qt.Key_Left and self._idx > 0:
             self._idx -= 1
             self._load_current()
