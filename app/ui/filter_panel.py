@@ -177,8 +177,9 @@ class _CollapsedTab(QWidget):
 class FilterPanel(QWidget):
     filter_changed = Signal(list, list, list)
 
-    def __init__(self, parent=None):
+    def __init__(self, settings=None, parent=None):
         super().__init__(parent)
+        self._settings = settings
         self._expanded = True
         self._status_checks: dict[str, _StatusCheckBox] = {}
         self._color_checks: dict[str, _ColorDotCheckBox] = {}
@@ -333,7 +334,7 @@ class FilterPanel(QWidget):
 
     def _open_blur_settings(self):
         from app.ui.blur_settings_dialog import BlurSettingsDialog
-        dlg = BlurSettingsDialog(self)
+        dlg = BlurSettingsDialog(self._settings, self)
         dlg.exec()
 
     def set_filter(self, statuses, colors):
