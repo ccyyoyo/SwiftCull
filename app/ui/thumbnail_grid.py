@@ -1,21 +1,64 @@
 import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QLabel, QGridLayout, QSlider
+    QLabel, QGridLayout, QSlider, QRubberBand,
 )
 from PySide6.QtCore import (
-    Signal, Qt, QObject, QRunnable, QThreadPool, QTimer
+    Signal, Qt, QObject, QRunnable, QThreadPool, QTimer, QPoint, QRect, QSize,
 )
 from PySide6.QtGui import QPixmap
 from app.ui.thumbnail_item import ThumbnailItem
 from app.utils.theme import BG_MAIN, BG_PANEL, TEXT_SECONDARY
 
 _SNAP_SIZES = [100, 160, 240]
+_MIN_DRAG_PX = 4
 
 
 class _ThumbSignals(QObject):
     ready = Signal(int, str)
     failed = Signal(int)
+
+
+class _GridContainer(QWidget):
+    """Widget hosting the QGridLayout. Forwards rubber-band drag events to
+    the surrounding ThumbnailGrid via signals.
+
+    Mouse events on a ThumbnailItem are absorbed by the item itself; events
+    on this container fire only on background gaps, which is what we want
+    for rubber-band starts.
+    """
+    band_pressed = Signal(QPoint, Qt.KeyboardModifiers)
+    band_moved = Signal(QPoint)
+    band_released = Signal(QPoint)
+    band_cancelled = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMouseTracking(True)
+        self._dragging = False
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._dragging = True
+            self.band_pressed.emit(event.pos(), event.modifiers())
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._dragging:
+            self.band_moved.emit(event.pos())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._dragging and event.button() == Qt.LeftButton:
+            self._dragging = False
+            self.band_released.emit(event.pos())
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
 
 class _ThumbRunnable(QRunnable):
@@ -105,7 +148,7 @@ class ThumbnailGrid(QWidget):
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        self._container = QWidget()
+        self._container = _GridContainer()
         self._container.setStyleSheet(f"background:{BG_MAIN};")
         self._grid = QGridLayout(self._container)
         self._grid.setSpacing(2)
@@ -117,6 +160,14 @@ class ThumbnailGrid(QWidget):
         self._scroll.verticalScrollBar().valueChanged.connect(
             lambda _: self._scroll_debounce.start()
         )
+
+        self._rubber = QRubberBand(QRubberBand.Rectangle, self._container)
+        self._rubber_start: QPoint = QPoint()
+        self._rubber_initial: set[int] = set()
+        self._rubber_active: bool = False
+        self._container.band_pressed.connect(self._on_band_pressed)
+        self._container.band_moved.connect(self._on_band_moved)
+        self._container.band_released.connect(self._on_band_released)
 
     def load_photos(self, photos, tag_repo, thumb_svc, folder_path: str):
         self._photos = list(photos)
@@ -182,6 +233,90 @@ class ThumbnailGrid(QWidget):
         tag = self._tag_repo.get_by_photo_id(photo_id)
         self._items[photo_id].set_status(tag.status if tag else None)
         self._items[photo_id].set_color(tag.color if tag else None)
+
+    def refresh_item_thumbnail(self, photo_id: int):
+        """Force re-fetch of a single tile's thumbnail (e.g. after modify)."""
+        item = self._items.get(photo_id)
+        if item is None:
+            return
+        item.reset_thumb()
+        self._scroll_debounce.start()
+
+    def mark_missing(self, missing_relative_paths) -> int:
+        """Apply the 'original file missing' visual state to matching items.
+
+        Items currently shown but not in the list have their missing flag
+        cleared (e.g. a previously-missing file came back). Returns the
+        number of items now flagged missing.
+        """
+        wanted = set(missing_relative_paths or [])
+        flagged = 0
+        for pid, photo in self._photo_by_id.items():
+            item = self._items.get(pid)
+            if item is None:
+                continue
+            is_missing = photo.relative_path in wanted
+            item.set_missing(is_missing)
+            if is_missing:
+                flagged += 1
+        return flagged
+
+    # ---- rubber-band selection -----------------------------------------
+
+    def _on_band_pressed(self, pos: QPoint, modifiers):
+        ctrl = bool(modifiers & Qt.ControlModifier)
+        self._rubber_active = True
+        self._rubber_start = QPoint(pos)
+        self._rubber_initial = set(self._selected) if ctrl else set()
+        self._rubber.setGeometry(QRect(pos, QSize(0, 0)))
+        self._rubber.show()
+        # If not Ctrl-dragging, start by clearing the existing selection so
+        # the live preview matches the post-release state from the get-go.
+        if not ctrl:
+            self._set_selection(set(), emit=False)
+
+    def _on_band_moved(self, pos: QPoint):
+        if not self._rubber_active:
+            return
+        rect = QRect(self._rubber_start, pos).normalized()
+        self._rubber.setGeometry(rect)
+        new_selection = set(self._rubber_initial) | self._items_in_rect(rect)
+        self._set_selection(new_selection, emit=False)
+
+    def _on_band_released(self, pos: QPoint):
+        if not self._rubber_active:
+            return
+        self._rubber_active = False
+        self._rubber.hide()
+        rect = QRect(self._rubber_start, pos).normalized()
+        # Tiny drag = a click on empty background; treat as "deselect all"
+        # unless the user was Ctrl-extending an existing selection.
+        if rect.width() < _MIN_DRAG_PX and rect.height() < _MIN_DRAG_PX:
+            if not self._rubber_initial:
+                self._set_selection(set(), emit=True)
+            else:
+                self._set_selection(set(self._rubber_initial), emit=True)
+            self._rubber_initial = set()
+            return
+        new_selection = set(self._rubber_initial) | self._items_in_rect(rect)
+        self._set_selection(new_selection, emit=True)
+        self._rubber_initial = set()
+
+    def _items_in_rect(self, rect: QRect) -> set[int]:
+        hits: set[int] = set()
+        for pid, item in self._items.items():
+            if item.geometry().intersects(rect):
+                hits.add(pid)
+        return hits
+
+    def _set_selection(self, ids: set[int], emit: bool):
+        self._selected = set(ids)
+        for pid, item in self._items.items():
+            item.set_selected(pid in self._selected)
+        if emit:
+            self.selection_changed.emit(list(self._selected))
+
+    # --------------------------------------------------------------------
 
     def _on_item_selection(self, photo_id: int, modifier: str):
         photo_ids = [p.id for p in self._photos]
@@ -287,6 +422,10 @@ class ThumbnailGrid(QWidget):
                 return
             elif key == Qt.Key_M:
                 self.batch_status_requested.emit(selected_list, "maybe")
+                return
+            elif key == Qt.Key_U:
+                # "clear" is a sentinel that GridView dispatches to clear_status
+                self.batch_status_requested.emit(selected_list, "clear")
                 return
         if key == Qt.Key_Space and len(self._selected) == 1:
             self.photo_double_clicked.emit(list(self._selected)[0])

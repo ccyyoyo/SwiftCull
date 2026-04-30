@@ -75,6 +75,7 @@ os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 | relative_path | TEXT UNIQUE | 相對路徑 |
 | filename | TEXT | |
 | file_size | INTEGER | bytes |
+| mtime | REAL | 檔案 modification time（POSIX timestamp），用於偵測外部修改 |
 | shot_at | TEXT | EXIF 拍攝時間（ISO8601） |
 | imported_at | TEXT | 匯入時間（ISO8601） |
 | width | INTEGER | 原始寬度 |
@@ -128,10 +129,15 @@ os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 
 ### 重開已存在專案
 
-1. 直接載入 SQLite（目標 < 5 秒）
-2. 背景掃描比對所有檔案 mtime
-3. 發現差異 → 彈出 dialog：「發現 N 個新/修改檔案，是否匯入？」
-4. 使用者選「是」→ 匯入；選「否」→ 略過
+1. 直接載入 SQLite，立刻顯示 Grid（目標 < 5 秒）
+2. 背景 thread 掃描資料夾，比對每個檔案的 mtime 與 `photos.mtime`
+   - DB 沒有此 `relative_path` → 視為「新增」
+   - DB 有但磁碟上 mtime 較新 → 視為「修改」
+3. 發現差異 → 右下角 toast 通知：「發現 N 個新增 / M 個修改檔案」，含「匯入」「忽略」按鈕
+   - Toast 不搶焦點、可手動關閉、不打斷 culling 流程
+4. 使用者按「匯入」→ 進入跟首次匯入一樣的 worker pipeline
+   - 「新增」走 INSERT，「修改」走 UPDATE 並失效對應縮圖快取
+5. 使用者按「忽略」或關閉 toast → 不匯入；下次開啟此專案會再次掃描
 
 ### 損壞檔案處理
 

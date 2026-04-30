@@ -8,6 +8,13 @@ class TagRepository:
         self._conn = conn
 
     def upsert(self, tag: Tag) -> None:
+        """Write the full Tag state. Callers that want partial updates must
+        read the existing row first (TagService does this).
+
+        Critically, passing `status=None` or `color=None` *clears* the field.
+        The previous implementation silently kept the prior value, which made
+        TagService.clear_status a no-op.
+        """
         now = datetime.now(timezone.utc).isoformat()
         existing = self.get_by_photo_id(tag.photo_id)
         if existing is None:
@@ -18,9 +25,7 @@ class TagRepository:
         else:
             self._conn.execute(
                 "UPDATE tags SET status=?, color=?, updated_at=? WHERE photo_id=?",
-                (tag.status if tag.status is not None else existing.status,
-                 tag.color if tag.color is not None else existing.color,
-                 now, tag.photo_id)
+                (tag.status, tag.color, now, tag.photo_id),
             )
         self._conn.commit()
 

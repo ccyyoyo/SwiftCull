@@ -60,6 +60,7 @@ class _PreviewPane(QWidget):
 
 class GridView(QWidget):
     refresh_requested = Signal()
+    import_cancel_requested = Signal()
 
     def __init__(self, folder_path, photo_repo, tag_repo,
                  thumb_svc, tag_svc, filter_svc, parent=None):
@@ -75,6 +76,9 @@ class GridView(QWidget):
         self._current_colors = None
         self._split_mode = False
         self._import_errors: list[tuple[str, str]] = []
+        self._import_total = 0
+        self._import_done = 0
+        self._cancelling = False
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -119,9 +123,24 @@ class GridView(QWidget):
         self._import_progress.hide()
         tb.addWidget(self._import_progress)
 
+        self._cancel_btn = QPushButton("取消")
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setToolTip("取消匯入；已匯入的檔案會保留")
+        self._cancel_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #444; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ color:#fff; border-color:{REJECT_CLR};"
+            f" background:rgba(170,50,50,30); }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#2a2a2a; }}"
+        )
+        self._cancel_btn.clicked.connect(self._on_cancel_clicked)
+        self._cancel_btn.hide()
+        tb.addWidget(self._cancel_btn)
+
         self._refresh_btn = QPushButton("↻  重新掃描")
         self._refresh_btn.setCursor(Qt.PointingHandCursor)
-        self._refresh_btn.setToolTip("重新掃描資料夾，匯入新增的照片")
+        self._refresh_btn.setToolTip("重新掃描資料夾，找出新增 / 修改的檔案")
         self._refresh_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
             f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
@@ -212,21 +231,88 @@ class GridView(QWidget):
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
 
     def begin_import(self, total: int):
+        self._import_total = total
+        self._import_done = 0
+        self._cancelling = False
         self._refresh_btn.setEnabled(False)
         self._import_progress.setRange(0, max(1, total))
         self._import_progress.setValue(0)
         self._import_progress.show()
         self._import_label.setText(f"匯入中 0 / {total}")
         self._import_label.show()
+        self._cancel_btn.setEnabled(True)
+        self._cancel_btn.setText("取消")
+        self._cancel_btn.show()
 
     def update_import_progress(self, current: int, total: int):
+        self._import_total = total
+        self._import_done = current
         self._import_progress.setRange(0, max(1, total))
         self._import_progress.setValue(current)
-        self._import_label.setText(f"匯入中 {current} / {total}")
+        if self._cancelling:
+            self._import_label.setText(f"取消中… {current} / {total}")
+        else:
+            self._import_label.setText(f"匯入中 {current} / {total}")
 
     def end_import(self):
+        was_cancelling = self._cancelling
+        done = self._import_done
+        total = self._import_total
         self._import_progress.hide()
         self._import_label.hide()
+        self._cancel_btn.hide()
+        self._cancel_btn.setEnabled(True)
+        self._cancel_btn.setText("取消")
+        self._cancelling = False
+        self._refresh_btn.setEnabled(True)
+        if was_cancelling:
+            self._show_cancelled_message(done, total)
+
+    def _on_cancel_clicked(self):
+        from PySide6.QtWidgets import QMessageBox
+        if self._cancelling:
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("取消匯入")
+        box.setIcon(QMessageBox.Question)
+        box.setText("確定取消匯入？")
+        box.setInformativeText(
+            f"已匯入 {self._import_done} / {self._import_total} 張。"
+            "已匯入的檔案會保留。"
+        )
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.button(QMessageBox.Yes).setText("取消匯入")
+        box.button(QMessageBox.No).setText("繼續匯入")
+        box.setDefaultButton(QMessageBox.No)
+        if box.exec() != QMessageBox.Yes:
+            return
+        self._cancelling = True
+        self._cancel_btn.setEnabled(False)
+        self._cancel_btn.setText("取消中…")
+        self._import_label.setText(
+            f"取消中… {self._import_done} / {self._import_total}"
+        )
+        self.import_cancel_requested.emit()
+
+    def _show_cancelled_message(self, done: int, total: int):
+        try:
+            from app.ui.toast import Toast
+        except Exception:
+            return
+        toast = Toast(
+            self,
+            f"已取消匯入。完成 {done} / {total} 張，未處理的會在下次掃描時偵測。",
+            confirm_label=None,
+            dismiss_label="知道了",
+            auto_dismiss_ms=6000,
+        )
+        toast.show_at_corner()
+
+    def scan_finished(self):
+        """Called after a background scan completes regardless of outcome.
+        Re-enables the refresh button if no import has taken its place."""
+        if self._import_progress.isVisible():
+            return  # an import is in flight; end_import will re-enable later
         self._refresh_btn.setEnabled(True)
 
     def _on_refresh_clicked(self):
@@ -238,6 +324,15 @@ class GridView(QWidget):
         if self._current_statuses or self._current_colors:
             return
         self._grid.add_photo(photo)
+
+    def on_photo_updated(self, photo_id: int):
+        """A modified file just had its metadata refreshed; force the
+        thumbnail to regenerate from the new on-disk content."""
+        self._grid.refresh_item_thumbnail(photo_id)
+
+    def set_missing_paths(self, missing_relative_paths):
+        """Sync the 'original file missing' overlay across all visible tiles."""
+        self._grid.mark_missing(missing_relative_paths)
 
     def add_import_error(self, rel_path: str, reason: str):
         self._import_errors.append((rel_path, reason))
@@ -282,7 +377,10 @@ class GridView(QWidget):
         if len(photo_ids) > 1:
             if not confirm_batch(len(photo_ids), status, self):
                 return
-        self._tag_svc.batch_set_status(photo_ids, status)
+        if status == "clear":
+            self._tag_svc.batch_clear_status(photo_ids)
+        else:
+            self._tag_svc.batch_set_status(photo_ids, status)
         for pid in photo_ids:
             self._grid.update_item_tag(pid)
 
@@ -298,8 +396,17 @@ class GridView(QWidget):
         loupe = LoupeView(
             photo_ids, photo_ids.index(photo_id),
             self._folder, self._photo_repo,
-            self._tag_repo, self._tag_svc
+            self._tag_repo, self._tag_svc,
+            filter_svc=self._filter_svc,
+            initial_statuses=self._current_statuses,
+            initial_colors=self._current_colors,
         )
         loupe.tag_changed.connect(self._grid.update_item_tag)
+        loupe.filter_changed.connect(self._on_loupe_filter_changed)
         loupe.showFullScreen()
         loupe.closed.connect(loupe.deleteLater)
+
+    def _on_loupe_filter_changed(self, statuses: list, colors: list):
+        """Filter changes inside Loupe propagate back to the grid + panel."""
+        self._filter_panel.set_filter(statuses, colors)
+        self._refresh(statuses or None, colors or None)

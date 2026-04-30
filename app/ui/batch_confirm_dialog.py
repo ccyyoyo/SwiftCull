@@ -5,13 +5,28 @@ from PySide6.QtCore import Qt
 
 _dont_ask_again: dict[str, bool] = {}
 
+_STATUS_LABEL = {
+    "pick": "Pick",
+    "reject": "Reject",
+    "maybe": "Maybe",
+    "clear": "未標記",
+}
+
+
+def _format_message(count: int, status: str) -> str:
+    label = _STATUS_LABEL.get(status, status)
+    if status == "clear":
+        return f"清除 {count} 張照片的標記？"
+    return f"將 {count} 張照片標記為「{label}」？"
+
+
 class BatchConfirmDialog(QDialog):
     def __init__(self, count: int, status: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle("批次標記確認")
         self.setModal(True)
         layout = QVBoxLayout(self)
-        label = QLabel(f"將 {count} 張照片標記為「{status}」？")
+        label = QLabel(_format_message(count, status))
         label.setAlignment(Qt.AlignCenter)
         layout.addWidget(label)
         self._dont_ask = QCheckBox("之後不再詢問此操作")
