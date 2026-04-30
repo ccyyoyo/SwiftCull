@@ -9,13 +9,6 @@ def _insert_photo(db_conn, rel_path):
         Photo(id=None, relative_path=rel_path, filename=rel_path, file_size=1)
     )
 
-def _insert_photo_with_blur(repo, path, blur_score):
-    photo = Photo(id=None, relative_path=path, filename=path, file_size=100)
-    pid = repo.insert(photo)
-    if blur_score is not None:
-        repo.update_blur_score(pid, blur_score)
-    return pid
-
 def test_filter_by_status_pick(db_conn):
     p1 = _insert_photo(db_conn, "f1.jpg")
     p2 = _insert_photo(db_conn, "f2.jpg")
@@ -62,8 +55,8 @@ def test_filter_blur_blurry(db_conn):
     tag_repo = TagRepository(db_conn)
     svc = FilterService(photo_repo, tag_repo)
 
-    pid_blurry = _insert_photo_with_blur(photo_repo, "blurry.jpg", 5.0)
-    pid_sharp = _insert_photo_with_blur(photo_repo, "sharp.jpg", 500.0)
+    pid_blurry = _insert_with_blur(photo_repo, "blurry.jpg", 5.0)
+    pid_sharp = _insert_with_blur(photo_repo, "sharp.jpg", 500.0)
 
     results = svc.filter(blur=["blurry"], blur_fixed_threshold=100.0)
     ids = [p.id for p in results]
@@ -75,8 +68,8 @@ def test_filter_blur_unanalyzed(db_conn):
     tag_repo = TagRepository(db_conn)
     svc = FilterService(photo_repo, tag_repo)
 
-    pid_none = _insert_photo_with_blur(photo_repo, "none.jpg", None)
-    pid_scored = _insert_photo_with_blur(photo_repo, "scored.jpg", 200.0)
+    pid_none = _insert_with_blur(photo_repo, "none.jpg", None)
+    pid_scored = _insert_with_blur(photo_repo, "scored.jpg", 200.0)
 
     results = svc.filter(blur=["unanalyzed"])
     ids = [p.id for p in results]
