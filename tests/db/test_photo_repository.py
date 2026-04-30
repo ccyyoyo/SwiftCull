@@ -128,3 +128,22 @@ def test_get_path_mtime_map(db_conn):
 def test_get_path_mtime_map_empty_db(db_conn):
     repo = PhotoRepository(db_conn)
     assert repo.get_path_mtime_map() == {}
+
+
+def test_get_unanalyzed_ids_returns_only_null_blur(db_conn):
+    repo = PhotoRepository(db_conn)
+    pid1 = repo.insert(Photo(id=None, relative_path="a.jpg", filename="a.jpg", file_size=1))
+    pid2 = repo.insert(Photo(id=None, relative_path="b.jpg", filename="b.jpg", file_size=1))
+    pid3 = repo.insert(Photo(id=None, relative_path="c.jpg", filename="c.jpg", file_size=1))
+    repo.update_blur_score(pid2, 50.0)
+    result = repo.get_unanalyzed_ids()
+    assert pid1 in result
+    assert pid3 in result
+    assert pid2 not in result
+
+
+def test_get_unanalyzed_ids_empty_when_all_analyzed(db_conn):
+    repo = PhotoRepository(db_conn)
+    pid = repo.insert(Photo(id=None, relative_path="x.jpg", filename="x.jpg", file_size=1))
+    repo.update_blur_score(pid, 99.0)
+    assert repo.get_unanalyzed_ids() == []

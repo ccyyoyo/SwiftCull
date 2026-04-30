@@ -78,6 +78,13 @@ class PhotoRepository:
         ).fetchall()
         return {r["relative_path"]: r["mtime"] for r in rows}
 
+    def get_unanalyzed_ids(self) -> list[int]:
+        """Return IDs of photos where blur_score IS NULL."""
+        rows = self._conn.execute(
+            "SELECT id FROM photos WHERE blur_score IS NULL"
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+
     def get_all(self) -> List[Photo]:
         rows = self._conn.execute(
             "SELECT * FROM photos ORDER BY shot_at, filename"
