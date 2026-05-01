@@ -44,14 +44,17 @@ class ScanController(QObject):
 
     def __init__(self, folder_path: str, db_path: str, parent=None):
         super().__init__(parent)
+        self._result = ScanResult()
         self._thread = QThread()
         self._worker = ScanWorker(folder_path, db_path)
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._on_worker_finished)
+        self._worker.finished.connect(self._store_result)
         self._worker.finished.connect(self._thread.quit)
-        self._thread.finished.connect(self._cleanup)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.finished.connect(self._on_thread_finished)
 
     def start(self):
         self._thread.start()
@@ -59,9 +62,8 @@ class ScanController(QObject):
     def wait(self, timeout_ms: int = 5000) -> bool:
         return self._thread.wait(timeout_ms)
 
-    def _on_worker_finished(self, result: ScanResult):
-        self.finished.emit(result)
+    def _store_result(self, result: ScanResult):
+        self._result = result
 
-    def _cleanup(self):
-        self._worker.deleteLater()
-        self._thread.deleteLater()
+    def _on_thread_finished(self):
+        self.finished.emit(self._result)

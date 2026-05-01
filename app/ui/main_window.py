@@ -136,7 +136,7 @@ class MainWindow(QMainWindow):
             log.warning("Folder or DB path not set")
             return
         self._dismiss_toast()
-        self._scan_ctrl = ScanController(self._folder_path, self._db_path)
+        self._scan_ctrl = ScanController(self._folder_path, self._db_path, parent=self)
         self._scan_ctrl.finished.connect(self._on_scan_finished)
         log.info("Starting ScanController")
         self._scan_ctrl.start()
