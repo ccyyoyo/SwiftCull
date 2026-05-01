@@ -109,6 +109,7 @@ class LoupeView(QWidget):
                  filter_svc=None,
                  initial_statuses: Optional[list[str]] = None,
                  initial_colors: Optional[list[str]] = None,
+                 settings=None,
                  parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
@@ -121,6 +122,7 @@ class LoupeView(QWidget):
         self._tag_repo = tag_repo
         self._tag_svc = tag_svc
         self._filter_svc = filter_svc
+        self._settings = settings  # SettingsDB instance, may be None
         self._statuses = list(initial_statuses) if initial_statuses else []
         self._colors = list(initial_colors) if initial_colors else []
         self._zoom = 1.0
@@ -384,8 +386,9 @@ class LoupeView(QWidget):
             )
 
     def _update_blur_label(self):
-        import json
         from app.utils.theme import BLUR_BLURRY, BLUR_SHARP, BLUR_UNKNOWN
+        if not self._ids:
+            return
         photo_id = self._ids[self._idx]
         photo = self._photo_repo.get_by_id(photo_id)
         score = photo.blur_score if photo else None
@@ -394,23 +397,30 @@ class LoupeView(QWidget):
             self._blur_label.setStyleSheet(
                 f"color:{BLUR_UNKNOWN}; font-size:13px; background:transparent; padding:4px;"
             )
-        else:
-            settings_path = os.path.join(
-                os.environ.get("APPDATA", os.path.expanduser("~")),
-                "SwiftCull", "settings.json"
-            )
-            threshold = 100.0
-            try:
-                with open(settings_path, encoding="utf-8") as f:
-                    s = json.load(f)
-                    threshold = float(s.get("blur_fixed_threshold", 100.0))
-            except Exception:
-                pass
-            color = BLUR_BLURRY if score < threshold else BLUR_SHARP
-            self._blur_label.setText(f"Blur: {score:.1f}")
-            self._blur_label.setStyleSheet(
-                f"color:{color}; font-size:13px; background:transparent; padding:4px;"
-            )
+            return
+
+        threshold = self._resolve_blur_threshold()
+        color = BLUR_BLURRY if score < threshold else BLUR_SHARP
+        self._blur_label.setText(f"Blur: {score:.1f}")
+        self._blur_label.setStyleSheet(
+            f"color:{color}; font-size:13px; background:transparent; padding:4px;"
+        )
+
+    def _resolve_blur_threshold(self) -> float:
+        """Read blur threshold from SettingsDB, handling relative mode."""
+        if self._settings is None:
+            return 100.0
+        mode = self._settings.get("blur_mode", "fixed")
+        fixed = float(self._settings.get("blur_fixed_threshold", 100.0))
+        if mode != "relative":
+            return fixed
+        percent = float(self._settings.get("blur_relative_percent", 20.0))
+        all_photos = self._photo_repo.get_all()
+        scores = [p.blur_score for p in all_photos if p.blur_score is not None]
+        if not scores:
+            return fixed
+        from app.core.blur_service import BlurService
+        return BlurService().relative_threshold(scores, percent)
 
     def _current_photo_id(self) -> Optional[int]:
         if not self._ids:
