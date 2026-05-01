@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 
+from app.core.blur_service import BlurService
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, QApplication
 )
@@ -388,6 +389,7 @@ class LoupeView(QWidget):
     def _update_blur_label(self):
         from app.utils.theme import BLUR_BLURRY, BLUR_SHARP, BLUR_UNKNOWN
         if not self._ids:
+            self._blur_label.setText("")
             return
         photo_id = self._ids[self._idx]
         photo = self._photo_repo.get_by_id(photo_id)
@@ -419,7 +421,6 @@ class LoupeView(QWidget):
         scores = [p.blur_score for p in all_photos if p.blur_score is not None]
         if not scores:
             return fixed
-        from app.core.blur_service import BlurService
         return BlurService().relative_threshold(scores, percent)
 
     def _current_photo_id(self) -> Optional[int]:
