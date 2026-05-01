@@ -334,6 +334,8 @@ class FilterPanel(QWidget):
 
     def _open_blur_settings(self):
         from app.ui.blur_settings_dialog import BlurSettingsDialog
+        if self._settings is None:
+            return
         dlg = BlurSettingsDialog(self._settings, self)
         dlg.exec()
 

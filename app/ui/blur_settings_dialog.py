@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QSpinBox
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 
 from app.db.settings_db import SettingsDB
 
