@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Optional
 
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
@@ -7,9 +8,11 @@ from app.core.recent_projects import RecentProjects
 from app.db.settings_db import SettingsDB
 from app.ui.welcome_view import WelcomeView
 
+log = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
     def __init__(self):
+        log.info("MainWindow.__init__ starting")
         super().__init__()
         self.setWindowTitle("SwiftCull")
         self.resize(1280, 800)
@@ -30,13 +33,18 @@ class MainWindow(QMainWindow):
         self._db_path: str = ""
         self._cache_dir: str = ""
 
+        log.info("Setting up SettingsDB and recent projects")
         self._settings = SettingsDB()
         self._recent = RecentProjects(self._settings)
         self._refresh_recent_view()
 
+        log.info("Checking for last folder")
         last_folder = self._settings.get("last_folder", "")
         if last_folder and os.path.isdir(last_folder):
+            log.info("Loading last folder: %s", last_folder)
             self._load_folder(last_folder)
+        else:
+            log.info("No last folder or folder missing")
 
     def _on_folder_selected(self, folder_path: str):
         self._load_folder(folder_path)
@@ -49,6 +57,7 @@ class MainWindow(QMainWindow):
         self._welcome.set_recent_projects(self._recent.list_all())
 
     def _load_folder(self, folder_path: str):
+        log.info("_load_folder starting: %s", folder_path)
         from app.db.connection import get_connection, init_db
         from app.db.photo_repository import PhotoRepository
         from app.db.tag_repository import TagRepository
@@ -58,13 +67,16 @@ class MainWindow(QMainWindow):
         from app.core.import_service import ImportService
         from app.ui.grid_view import GridView
 
+        log.info("Setting up project directories")
         local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
         project_name = os.path.basename(folder_path)
         project_dir = os.path.join(local_app_data, "SwiftCull", "projects", project_name)
         os.makedirs(project_dir, exist_ok=True)
         db_path = os.path.join(project_dir, "project.db")
         cache_dir = os.path.join(project_dir, "cache")
+        log.info("DB: %s, Cache: %s", db_path, cache_dir)
 
+        log.info("Initializing database")
         conn = get_connection(db_path)
         init_db(conn)
         photo_repo = PhotoRepository(conn)
@@ -73,6 +85,7 @@ class MainWindow(QMainWindow):
         tag_svc = TagService(tag_repo)
         filter_svc = FilterService(photo_repo, tag_repo)
 
+        log.info("Creating GridView")
         self._settings.set("last_folder", folder_path)
         self._recent.add(folder_path)
         self._refresh_recent_view()
@@ -82,6 +95,7 @@ class MainWindow(QMainWindow):
             thumb_svc, tag_svc, filter_svc,
             settings=self._settings,
         )
+        log.info("GridView created successfully")
         self._grid_view.refresh_requested.connect(self._on_refresh_requested)
         self._grid_view.import_cancel_requested.connect(self._on_import_cancel_requested)
         self._stack.addWidget(self._grid_view)

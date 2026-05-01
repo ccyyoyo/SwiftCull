@@ -1,4 +1,5 @@
 import os
+import logging
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
     QSplitter, QLabel, QPushButton, QSizePolicy, QProgressBar
@@ -10,6 +11,8 @@ from app.ui.filter_panel import FilterPanel
 from app.utils.theme import (
     BG_DEEP, BG_PANEL, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, REJECT_CLR
 )
+
+log = logging.getLogger(__name__)
 
 class _PreviewPane(QWidget):
     """Right-side large image preview for split mode."""
@@ -64,6 +67,7 @@ class GridView(QWidget):
 
     def __init__(self, folder_path, photo_repo, tag_repo,
                  thumb_svc, tag_svc, filter_svc, settings, parent=None):
+        log.info("GridView.__init__ starting")
         super().__init__(parent)
         self._folder = folder_path
         self._photo_repo = photo_repo
@@ -83,6 +87,7 @@ class GridView(QWidget):
         self._import_total = 0
         self._import_done = 0
         self._cancelling = False
+        log.info("GridView.__init__ completed")
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
