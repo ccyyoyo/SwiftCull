@@ -91,6 +91,7 @@ class MainWindow(QMainWindow):
         self._folder_path = folder_path
         self._db_path = db_path
         self._cache_dir = cache_dir
+        self._grid_view._db_path = db_path
 
         # Decide what to do on open:
         #   * Empty DB (first-time import) -> import everything immediately.
@@ -101,6 +102,8 @@ class MainWindow(QMainWindow):
                 self._start_import(new_paths=new_paths, modified_paths=[])
         else:
             self._start_scan()
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(500, lambda: self._grid_view.reanalyze_missing_blur(db_path))
 
     # ---- scan ----------------------------------------------------------
 
@@ -212,6 +215,7 @@ class MainWindow(QMainWindow):
     def _on_import_finished(self):
         if self._grid_view is not None:
             self._grid_view.end_import()
+            self._grid_view.start_blur_analysis(self._db_path)
         self._import_ctrl = None
 
     def closeEvent(self, event):
