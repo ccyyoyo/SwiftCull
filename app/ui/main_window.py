@@ -154,10 +154,10 @@ class MainWindow(QMainWindow):
             log.info("Scan finished: %d missing files", len(missing))
             self._grid_view.set_missing_paths(missing)
 
-            # Now safe to start blur reanalysis (after scan thread finishes)
-            if self._db_path:
-                log.info("Starting blur reanalysis after scan completes")
-                self._grid_view.reanalyze_missing_blur(self._db_path)
+            # TODO: Blur reanalysis disabled (QThread issue with PySide6)
+            # if self._db_path:
+            #     log.info("Starting blur reanalysis after scan completes")
+            #     self._grid_view.reanalyze_missing_blur(self._db_path)
 
         if result is None or not result.has_changes:
             return
