@@ -110,29 +110,40 @@ class MainWindow(QMainWindow):
         # Decide what to do on open:
         #   * Empty DB (first-time import) -> import everything immediately.
         #   * Non-empty DB (re-open) -> background scan, then toast if changes.
-        if photo_repo.count() == 0:
+        photo_count = photo_repo.count()
+        log.info("Photo count: %d", photo_count)
+        if photo_count == 0:
+            log.info("Empty DB, scanning folder for initial import")
             new_paths = ImportService().scan_folder(folder_path)
             if new_paths:
+                log.info("Found %d new files, starting import", len(new_paths))
                 self._start_import(new_paths=new_paths, modified_paths=[])
+            else:
+                log.info("No new files found")
         else:
+            log.info("Existing DB, starting scan for changes")
             self._start_scan()
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(500, lambda: self._grid_view.reanalyze_missing_blur(db_path))
 
     # ---- scan ----------------------------------------------------------
 
     def _start_scan(self):
+        log.info("_start_scan called")
         from app.core.scan_worker import ScanController
         if self._scan_ctrl is not None:
+            log.warning("Scan already in progress")
             return
         if not self._folder_path or not self._db_path:
+            log.warning("Folder or DB path not set")
             return
         self._dismiss_toast()
         self._scan_ctrl = ScanController(self._folder_path, self._db_path)
         self._scan_ctrl.finished.connect(self._on_scan_finished)
+        log.info("Starting ScanController")
         self._scan_ctrl.start()
+        log.info("ScanController started")
 
     def _on_scan_finished(self, result):
+        log.info("_on_scan_finished called")
         self._scan_ctrl = None
         if self._grid_view is not None:
             self._grid_view.scan_finished()
@@ -140,7 +151,13 @@ class MainWindow(QMainWindow):
             # actionable changes, so a returning user immediately sees that
             # files vanished without being prompted to "import" anything.
             missing = list(result.missing_paths) if result is not None else []
+            log.info("Scan finished: %d missing files", len(missing))
             self._grid_view.set_missing_paths(missing)
+
+            # Now safe to start blur reanalysis (after scan thread finishes)
+            if self._db_path:
+                log.info("Starting blur reanalysis after scan completes")
+                self._grid_view.reanalyze_missing_blur(self._db_path)
 
         if result is None or not result.has_changes:
             return

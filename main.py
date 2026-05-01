@@ -17,8 +17,12 @@ def main():
         window = MainWindow()
         log.info("MainWindow created")
         window.show()
-        log.info("Window shown")
-        sys.exit(app.exec())
+        log.info("Window shown, entering event loop")
+        sys.stdout.flush()
+        sys.stderr.flush()
+        exit_code = app.exec()
+        log.info("Event loop exited with code: %d", exit_code)
+        sys.exit(exit_code)
     except Exception as e:
         log.exception("Fatal error: %s", e)
         raise

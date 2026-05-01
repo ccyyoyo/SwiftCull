@@ -479,26 +479,39 @@ class GridView(QWidget):
 
     def reanalyze_missing_blur(self, db_path: str):
         """Analyse only photos with blur_score IS NULL."""
-        import sqlite3 as _sq
-        conn = _sq.connect(db_path)
-        conn.row_factory = _sq.Row
-        from app.db.photo_repository import PhotoRepository as _PR
-        repo = _PR(conn)
-        photo_ids = repo.get_unanalyzed_ids()
-        conn.close()
-        if not photo_ids:
-            return
-        self._start_blur_controller(db_path, photo_ids)
+        log.info("reanalyze_missing_blur called")
+        try:
+            import sqlite3 as _sq
+            conn = _sq.connect(db_path)
+            conn.row_factory = _sq.Row
+            from app.db.photo_repository import PhotoRepository as _PR
+            repo = _PR(conn)
+            photo_ids = repo.get_unanalyzed_ids()
+            conn.close()
+            log.info("Found %d unanalyzed photos", len(photo_ids))
+            if not photo_ids:
+                log.info("No unanalyzed photos, skipping blur analysis")
+                return
+            self._start_blur_controller(db_path, photo_ids)
+        except Exception as e:
+            log.exception("Error in reanalyze_missing_blur: %s", e)
 
     def _start_blur_controller(self, db_path: str, photo_ids: list):
-        from app.core.blur_worker import BlurController
-        if self._blur_ctrl is not None:
-            return
-        self._analyse_btn.setEnabled(False)
-        self._blur_ctrl = BlurController(self._folder, db_path, photo_ids)
-        self._blur_ctrl.photo_blur_updated.connect(self._on_photo_blur_updated)
-        self._blur_ctrl.finished.connect(self._on_blur_finished)
-        self._blur_ctrl.start()
+        log.info("_start_blur_controller called with %d photos", len(photo_ids))
+        try:
+            from app.core.blur_worker import BlurController
+            if self._blur_ctrl is not None:
+                log.warning("Blur controller already running")
+                return
+            self._analyse_btn.setEnabled(False)
+            self._blur_ctrl = BlurController(self._folder, db_path, photo_ids)
+            self._blur_ctrl.photo_blur_updated.connect(self._on_photo_blur_updated)
+            self._blur_ctrl.finished.connect(self._on_blur_finished)
+            log.info("Starting BlurController")
+            self._blur_ctrl.start()
+            log.info("BlurController started")
+        except Exception as e:
+            log.exception("Error in _start_blur_controller: %s", e)
 
     def _on_photo_blur_updated(self, photo_id: int, score: float):
         self._grid.update_item_tag(photo_id)

@@ -3,7 +3,11 @@
     "allow": [
       "WebSearch",
       "Bash(pip list *)",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(pytest -q)",
+      "Bash(python main.py)",
+      "Bash(python -m pytest -q --tb=no)",
+      "Bash(python -m pytest tests/ -q --tb=no)"
     ]
   }
 }
