@@ -80,6 +80,7 @@ class MainWindow(QMainWindow):
         self._grid_view = GridView(
             folder_path, photo_repo, tag_repo,
             thumb_svc, tag_svc, filter_svc,
+            settings=self._settings,
         )
         self._grid_view.refresh_requested.connect(self._on_refresh_requested)
         self._grid_view.import_cancel_requested.connect(self._on_import_cancel_requested)

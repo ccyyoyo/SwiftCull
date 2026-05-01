@@ -63,7 +63,7 @@ class GridView(QWidget):
     import_cancel_requested = Signal()
 
     def __init__(self, folder_path, photo_repo, tag_repo,
-                 thumb_svc, tag_svc, filter_svc, parent=None):
+                 thumb_svc, tag_svc, filter_svc, settings, parent=None):
         super().__init__(parent)
         self._folder = folder_path
         self._photo_repo = photo_repo
@@ -71,6 +71,10 @@ class GridView(QWidget):
         self._thumb_svc = thumb_svc
         self._tag_svc = tag_svc
         self._filter_svc = filter_svc
+        self._settings = settings  # SettingsDB instance
+        self._current_blur = None
+        self._blur_ctrl = None
+        self._db_path: str = ""
         self._selected_ids: list[int] = []
         self._current_statuses = None
         self._current_colors = None
@@ -85,7 +89,7 @@ class GridView(QWidget):
         root.setSpacing(0)
 
         # left filter panel
-        self._filter_panel = FilterPanel()
+        self._filter_panel = FilterPanel(settings=self._settings)
         self._filter_panel.filter_changed.connect(self._on_filter_changed)
         root.addWidget(self._filter_panel)
 
@@ -151,6 +155,20 @@ class GridView(QWidget):
         )
         self._refresh_btn.clicked.connect(self._on_refresh_clicked)
         tb.addWidget(self._refresh_btn)
+
+        self._analyse_btn = QPushButton("⊙  分析模糊")
+        self._analyse_btn.setCursor(Qt.PointingHandCursor)
+        self._analyse_btn.setToolTip("分析尚未計算模糊分數的照片")
+        self._analyse_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ background:#2a2a2a; color:#ddd;"
+            f" border-color:#555; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#222; }}"
+        )
+        self._analyse_btn.clicked.connect(self._on_analyse_clicked)
+        tb.addWidget(self._analyse_btn)
 
         self._split_btn = QPushButton("⊟  分割預覽")
         self._split_btn.setCheckable(True)
@@ -224,10 +242,17 @@ class GridView(QWidget):
             self._preview.clear()
             self._split_btn.setText("⊟  分割預覽")
 
-    def _refresh(self, statuses=None, colors=None):
+    def _refresh(self, statuses=None, colors=None, blur=None,
+                 blur_mode="fixed", blur_fixed_threshold=100.0,
+                 blur_relative_percent=20.0):
         self._current_statuses = statuses
         self._current_colors = colors
-        photos = self._filter_svc.filter(statuses=statuses, colors=colors)
+        self._current_blur = blur
+        photos = self._filter_svc.filter(
+            statuses=statuses, colors=colors, blur=blur,
+            blur_mode=blur_mode, blur_fixed_threshold=blur_fixed_threshold,
+            blur_relative_percent=blur_relative_percent,
+        )
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
 
     def begin_import(self, total: int):
@@ -356,8 +381,16 @@ class GridView(QWidget):
             return
         ErrorListDialog(self._import_errors, self).exec()
 
-    def _on_filter_changed(self, statuses, colors):
-        self._refresh(statuses or None, colors or None)
+    def _on_filter_changed(self, statuses, colors, blur):
+        self._current_blur = blur or None
+        mode = self._settings.get("blur_mode", "fixed")
+        threshold = float(self._settings.get("blur_fixed_threshold", 100.0))
+        percent = float(self._settings.get("blur_relative_percent", 20.0))
+        self._refresh(
+            statuses or None, colors or None, blur or None,
+            blur_mode=mode, blur_fixed_threshold=threshold,
+            blur_relative_percent=percent,
+        )
 
     def _on_selection_changed(self, ids: list):
         self._selected_ids = ids
@@ -386,9 +419,16 @@ class GridView(QWidget):
 
     def _on_loupe(self, photo_id: int):
         from app.ui.loupe_view import LoupeView
+        mode = self._settings.get("blur_mode", "fixed")
+        threshold = float(self._settings.get("blur_fixed_threshold", 100.0))
+        percent = float(self._settings.get("blur_relative_percent", 20.0))
         photos = self._filter_svc.filter(
             statuses=self._current_statuses,
             colors=self._current_colors,
+            blur=self._current_blur,
+            blur_mode=mode,
+            blur_fixed_threshold=threshold,
+            blur_relative_percent=percent,
         )
         photo_ids = [p.id for p in photos]
         if photo_id not in photo_ids:
@@ -400,6 +440,7 @@ class GridView(QWidget):
             filter_svc=self._filter_svc,
             initial_statuses=self._current_statuses,
             initial_colors=self._current_colors,
+            settings=self._settings,
         )
         loupe.tag_changed.connect(self._grid.update_item_tag)
         loupe.filter_changed.connect(self._on_loupe_filter_changed)
@@ -409,4 +450,58 @@ class GridView(QWidget):
     def _on_loupe_filter_changed(self, statuses: list, colors: list):
         """Filter changes inside Loupe propagate back to the grid + panel."""
         self._filter_panel.set_filter(statuses, colors)
-        self._refresh(statuses or None, colors or None)
+        mode = self._settings.get("blur_mode", "fixed")
+        threshold = float(self._settings.get("blur_fixed_threshold", 100.0))
+        percent = float(self._settings.get("blur_relative_percent", 20.0))
+        self._refresh(
+            statuses or None, colors or None, self._current_blur,
+            blur_mode=mode, blur_fixed_threshold=threshold,
+            blur_relative_percent=percent,
+        )
+
+    def start_blur_analysis(self, db_path: str):
+        """Full re-analysis of all photos. Called after import completes."""
+        import sqlite3 as _sq
+        conn = _sq.connect(db_path)
+        conn.row_factory = _sq.Row
+        from app.db.photo_repository import PhotoRepository as _PR
+        repo = _PR(conn)
+        photo_ids = [p.id for p in repo.get_all()]
+        conn.close()
+        if not photo_ids:
+            return
+        self._start_blur_controller(db_path, photo_ids)
+
+    def reanalyze_missing_blur(self, db_path: str):
+        """Analyse only photos with blur_score IS NULL."""
+        import sqlite3 as _sq
+        conn = _sq.connect(db_path)
+        conn.row_factory = _sq.Row
+        from app.db.photo_repository import PhotoRepository as _PR
+        repo = _PR(conn)
+        photo_ids = repo.get_unanalyzed_ids()
+        conn.close()
+        if not photo_ids:
+            return
+        self._start_blur_controller(db_path, photo_ids)
+
+    def _start_blur_controller(self, db_path: str, photo_ids: list):
+        from app.core.blur_worker import BlurController
+        if self._blur_ctrl is not None:
+            return
+        self._analyse_btn.setEnabled(False)
+        self._blur_ctrl = BlurController(self._folder, db_path, photo_ids)
+        self._blur_ctrl.photo_blur_updated.connect(self._on_photo_blur_updated)
+        self._blur_ctrl.finished.connect(self._on_blur_finished)
+        self._blur_ctrl.start()
+
+    def _on_photo_blur_updated(self, photo_id: int, score: float):
+        self._grid.update_item_tag(photo_id)
+
+    def _on_blur_finished(self):
+        self._blur_ctrl = None
+        self._analyse_btn.setEnabled(True)
+
+    def _on_analyse_clicked(self):
+        if self._db_path:
+            self.reanalyze_missing_blur(self._db_path)
