@@ -83,3 +83,17 @@ def test_compute_score_returns_none_for_unreadable_raw(tmp_path):
     svc = BlurService()
     result = svc.compute_score(str(tmp_path), "shot.CR2")
     assert result is None
+
+
+def test_compute_score_reads_unicode_filename(tmp_path):
+    from app.core.blur_service import BlurService
+
+    arr = np.full((20, 20, 3), 128, dtype=np.uint8)
+    encoded = cv2.imencode(".jpg", arr)[1]
+    path = tmp_path / "60919-0012_調整大小.jpg"
+    encoded.tofile(str(path))
+
+    svc = BlurService()
+    result = svc.compute_score(str(tmp_path), path.name)
+
+    assert isinstance(result, float)

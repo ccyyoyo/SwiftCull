@@ -35,7 +35,8 @@ class ExposureService:
             return _ZERO
         abs_path = os.path.join(root_path, relative_path)
         try:
-            img = cv2.imread(abs_path)
+            from app.core.image_io import read_image_color
+            img = read_image_color(abs_path)
             if img is None:
                 return _ZERO
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

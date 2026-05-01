@@ -21,7 +21,8 @@ class BlurService:
             return None
         abs_path = os.path.join(root_path, relative_path)
         try:
-            img = cv2.imread(abs_path)
+            from app.core.image_io import read_image_color
+            img = read_image_color(abs_path)
             if img is None:
                 log.debug("Failed to read image: %s", relative_path)
                 return None
