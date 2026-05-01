@@ -1,5 +1,7 @@
+import os
 import sys
 import logging
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 from app.ui.main_window import MainWindow
 from app.utils.theme import APP_STYLESHEET
@@ -18,6 +20,9 @@ def main():
         log.info("MainWindow created")
         window.show()
         log.info("Window shown, entering event loop")
+        test_quit_ms = os.environ.get("SWIFTCULL_TEST_QUIT_MS")
+        if test_quit_ms:
+            QTimer.singleShot(int(test_quit_ms), app.quit)
         sys.stdout.flush()
         sys.stderr.flush()
         exit_code = app.exec()
