@@ -1,7 +1,7 @@
 import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QLabel, QGridLayout, QSlider, QRubberBand,
+    QLabel, QGridLayout, QSlider, QRubberBand, QMenu,
 )
 from PySide6.QtCore import (
     Signal, Qt, QObject, QRunnable, QThreadPool, QTimer, QPoint, QRect, QSize,
@@ -379,6 +379,79 @@ class ThumbnailGrid(QWidget):
 
     def clear_selection(self):
         self._set_selection(set(), emit=True)
+
+    def contextMenuEvent(self, event):
+        pos_in_container = self._container.mapFrom(self, event.pos())
+        clicked_id = None
+        for pid, item in self._items.items():
+            if item.geometry().contains(pos_in_container):
+                clicked_id = pid
+                break
+
+        if clicked_id is None:
+            return
+
+        if clicked_id not in self._selected:
+            self._set_selection({clicked_id}, emit=True)
+
+        photo_ids = list(self._selected)
+        n = len(photo_ids)
+
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            "QMenu { background:#212121; color:#e8e8e8; border:1px solid #333; }"
+            "QMenu::item { padding:5px 24px 5px 12px; }"
+            "QMenu::item:selected { background:#2d3a4a; }"
+            "QMenu::separator { height:1px; background:#333; margin:3px 0; }"
+            "QMenu::item:disabled { color:#555; }"
+        )
+
+        header = menu.addAction(f"標記 {n} 張照片")
+        header.setEnabled(False)
+        menu.addSeparator()
+
+        status_menu = menu.addMenu("標記狀態")
+        status_menu.setStyleSheet(menu.styleSheet())
+        act_pick   = status_menu.addAction("✓  Pick")
+        act_pick.setShortcut("P")
+        act_reject = status_menu.addAction("✗  Reject")
+        act_reject.setShortcut("R")
+        act_maybe  = status_menu.addAction("?  Maybe")
+        act_maybe.setShortcut("M")
+        status_menu.addSeparator()
+        act_clear_status = status_menu.addAction("清除狀態")
+        act_clear_status.setShortcut("U")
+
+        color_menu = menu.addMenu("顏色標籤")
+        color_menu.setStyleSheet(menu.styleSheet())
+        color_actions = {
+            "red":    color_menu.addAction("🔴  紅"),
+            "orange": color_menu.addAction("🟠  橙"),
+            "yellow": color_menu.addAction("🟡  黃"),
+            "green":  color_menu.addAction("🟢  綠"),
+            "blue":   color_menu.addAction("🔵  藍"),
+            "purple": color_menu.addAction("🟣  紫"),
+        }
+        color_menu.addSeparator()
+        act_clear_color = color_menu.addAction("清除顏色")
+
+        chosen = menu.exec(event.globalPos())
+
+        if chosen == act_pick:
+            self.batch_status_requested.emit(photo_ids, "pick")
+        elif chosen == act_reject:
+            self.batch_status_requested.emit(photo_ids, "reject")
+        elif chosen == act_maybe:
+            self.batch_status_requested.emit(photo_ids, "maybe")
+        elif chosen == act_clear_status:
+            self.batch_status_requested.emit(photo_ids, "clear")
+        elif chosen == act_clear_color:
+            self.batch_color_requested.emit(photo_ids, "clear")
+        else:
+            for color, act in color_actions.items():
+                if chosen == act:
+                    self.batch_color_requested.emit(photo_ids, color)
+                    break
 
     def _request_visible_thumbnails(self):
         if not self._items or self._thumb_svc is None:
