@@ -84,6 +84,7 @@ class ThumbnailGrid(QWidget):
     photo_double_clicked = Signal(int)
     selection_changed = Signal(list)
     batch_status_requested = Signal(list, str)
+    batch_color_requested = Signal(list, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -371,6 +372,13 @@ class ThumbnailGrid(QWidget):
                 continue
             self._grid.removeWidget(item)
             self._grid.addWidget(item, idx // cols, idx % cols)
+
+    def select_all(self):
+        all_ids = set(self._items.keys())
+        self._set_selection(all_ids, emit=True)
+
+    def clear_selection(self):
+        self._set_selection(set(), emit=True)
 
     def _request_visible_thumbnails(self):
         if not self._items or self._thumb_svc is None:
