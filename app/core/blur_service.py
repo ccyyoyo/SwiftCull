@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import List, Optional
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -35,19 +35,7 @@ class BlurService:
             return None
 
     def is_blurry_fixed(self, score: Optional[float], threshold: float) -> bool:
-        """True if score is below threshold (fixed mode). Returns False for None (unanalyzed)."""
+        """True if score is below threshold. Returns False for None (unanalyzed)."""
         if score is None:
             return False
         return score < threshold
-
-    def relative_threshold(self, scores: List[Optional[float]], bottom_percent: float) -> float:
-        """Return threshold so photos at/below the bottom_percent percentile are blurry."""
-        valid = [s for s in scores if s is not None]
-        if not valid:
-            log.debug("No valid blur scores for relative threshold")
-            return 0.0
-        sorted_scores = sorted(valid)
-        idx = max(0, int(len(sorted_scores) * bottom_percent / 100.0) - 1)
-        threshold = sorted_scores[idx] + 1e-9
-        log.debug("Relative threshold (%.1f%%): %.2f", bottom_percent, threshold)
-        return threshold

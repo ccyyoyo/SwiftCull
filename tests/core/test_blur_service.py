@@ -56,18 +56,6 @@ def test_is_blurry_fixed_mode_sharp(tmp_path):
     assert svc.is_blurry_fixed(score, threshold=10.0) is False
 
 
-def test_classify_relative(tmp_path):
-    from app.core.blur_service import BlurService
-    _make_sharp_jpeg(tmp_path)
-    _make_blurry_jpeg(tmp_path)
-    svc = BlurService()
-    scores = [svc.compute_score(str(tmp_path), "blurry.jpg"),
-              svc.compute_score(str(tmp_path), "sharp.jpg")]
-    threshold = svc.relative_threshold(scores, bottom_percent=50)
-    assert svc.is_blurry_fixed(scores[0], threshold) is True
-    assert svc.is_blurry_fixed(scores[1], threshold) is False
-
-
 def test_compute_score_returns_none_for_missing_file(tmp_path):
     from app.core.blur_service import BlurService
     svc = BlurService()
