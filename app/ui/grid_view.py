@@ -213,6 +213,34 @@ class GridView(QWidget):
         sb = QHBoxLayout(self._status_bar)
         sb.setContentsMargins(10, 0, 10, 0)
         sb.setSpacing(8)
+
+        _btn_style = (
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:1px 8px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover {{ background:#2a2a2a; color:#ddd; border-color:#555; }}"
+        )
+
+        self._select_all_btn = QPushButton("全選")
+        self._select_all_btn.setFixedHeight(18)
+        self._select_all_btn.setCursor(Qt.PointingHandCursor)
+        self._select_all_btn.setStyleSheet(_btn_style)
+        self._select_all_btn.clicked.connect(self._grid.select_all)
+        sb.addWidget(self._select_all_btn)
+
+        self._deselect_btn = QPushButton("取消全選")
+        self._deselect_btn.setFixedHeight(18)
+        self._deselect_btn.setCursor(Qt.PointingHandCursor)
+        self._deselect_btn.setStyleSheet(_btn_style)
+        self._deselect_btn.clicked.connect(self._grid.clear_selection)
+        self._deselect_btn.hide()
+        sb.addWidget(self._deselect_btn)
+
+        self._selection_label = QLabel("")
+        self._selection_label.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        self._selection_label.hide()
+        sb.addWidget(self._selection_label)
+
         sb.addStretch()
         self._error_btn = QPushButton("")
         self._error_btn.setCursor(Qt.PointingHandCursor)
@@ -395,13 +423,22 @@ class GridView(QWidget):
 
     def _on_selection_changed(self, ids: list):
         self._selected_ids = ids
-        # update preview pane if split mode and single selection
-        if self._split_mode and len(ids) == 1:
+        n = len(ids)
+        if n > 0:
+            self._selection_label.setText(f"已選 {n} 張")
+            self._selection_label.show()
+            self._deselect_btn.show()
+            self._select_all_btn.hide()
+        else:
+            self._selection_label.hide()
+            self._deselect_btn.hide()
+            self._select_all_btn.show()
+        if self._split_mode and n == 1:
             photo = self._photo_repo.get_by_id(ids[0])
             if photo:
                 abs_path = os.path.join(self._folder, photo.relative_path)
                 self._preview.show_photo(abs_path, photo.filename)
-        elif self._split_mode and len(ids) == 0:
+        elif self._split_mode and n == 0:
             self._preview.clear()
 
     def _on_batch_status(self, photo_ids: list, status: str):
