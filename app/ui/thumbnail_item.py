@@ -173,6 +173,9 @@ class ThumbnailItem(QWidget):
         self.double_clicked.emit(self.photo_id)
 
     def mousePressEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            super().mousePressEvent(event)
+            return
         if event.modifiers() & Qt.ShiftModifier:
             modifier = "shift"
         elif event.modifiers() & Qt.ControlModifier:
