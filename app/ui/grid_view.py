@@ -248,15 +248,13 @@ class GridView(QWidget):
             self._split_btn.setText("⊟  分割預覽")
 
     def _refresh(self, statuses=None, colors=None, blur=None,
-                 blur_mode="fixed", blur_fixed_threshold=100.0,
-                 blur_relative_percent=20.0):
+                 blur_fixed_threshold=100.0):
         self._current_statuses = statuses
         self._current_colors = colors
         self._current_blur = blur
         photos = self._filter_svc.filter(
             statuses=statuses, colors=colors, blur=blur,
-            blur_mode=blur_mode, blur_fixed_threshold=blur_fixed_threshold,
-            blur_relative_percent=blur_relative_percent,
+            blur_fixed_threshold=blur_fixed_threshold,
         )
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
 
@@ -388,13 +386,10 @@ class GridView(QWidget):
 
     def _on_filter_changed(self, statuses, colors, blur):
         self._current_blur = blur or None
-        mode = self._settings.get("blur_mode", "fixed")
         threshold = float(self._settings.get("blur_fixed_threshold", 100.0))
-        percent = float(self._settings.get("blur_relative_percent", 20.0))
         self._refresh(
             statuses or None, colors or None, blur or None,
-            blur_mode=mode, blur_fixed_threshold=threshold,
-            blur_relative_percent=percent,
+            blur_fixed_threshold=threshold,
         )
 
     def _on_selection_changed(self, ids: list):
@@ -424,16 +419,12 @@ class GridView(QWidget):
 
     def _on_loupe(self, photo_id: int):
         from app.ui.loupe_view import LoupeView
-        mode = self._settings.get("blur_mode", "fixed")
         threshold = float(self._settings.get("blur_fixed_threshold", 100.0))
-        percent = float(self._settings.get("blur_relative_percent", 20.0))
         photos = self._filter_svc.filter(
             statuses=self._current_statuses,
             colors=self._current_colors,
             blur=self._current_blur,
-            blur_mode=mode,
             blur_fixed_threshold=threshold,
-            blur_relative_percent=percent,
         )
         photo_ids = [p.id for p in photos]
         if photo_id not in photo_ids:
@@ -455,13 +446,10 @@ class GridView(QWidget):
     def _on_loupe_filter_changed(self, statuses: list, colors: list):
         """Filter changes inside Loupe propagate back to the grid + panel."""
         self._filter_panel.set_filter(statuses, colors)
-        mode = self._settings.get("blur_mode", "fixed")
         threshold = float(self._settings.get("blur_fixed_threshold", 100.0))
-        percent = float(self._settings.get("blur_relative_percent", 20.0))
         self._refresh(
             statuses or None, colors or None, self._current_blur,
-            blur_mode=mode, blur_fixed_threshold=threshold,
-            blur_relative_percent=percent,
+            blur_fixed_threshold=threshold,
         )
 
     def start_blur_analysis(self, db_path: str):
