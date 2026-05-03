@@ -41,3 +41,17 @@ class TagService:
             tag = self._repo.get_by_photo_id(pid) or Tag(photo_id=pid)
             tag.status = None
             self._repo.upsert(tag)
+
+    def batch_set_color(self, photo_ids: List[int], color: str) -> None:
+        if color not in VALID_COLORS:
+            raise ValueError(f"Invalid color: {color!r}")
+        for photo_id in photo_ids:
+            tag = self._repo.get_by_photo_id(photo_id) or Tag(photo_id=photo_id)
+            tag.color = color
+            self._repo.upsert(tag)
+
+    def batch_clear_color(self, photo_ids: List[int]) -> None:
+        for photo_id in photo_ids:
+            tag = self._repo.get_by_photo_id(photo_id) or Tag(photo_id=photo_id)
+            tag.color = None
+            self._repo.upsert(tag)
