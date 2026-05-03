@@ -1,7 +1,6 @@
 import os
 from typing import Optional
 
-from app.core.blur_service import BlurService
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, QApplication
 )
@@ -409,19 +408,9 @@ class LoupeView(QWidget):
         )
 
     def _resolve_blur_threshold(self) -> float:
-        """Read blur threshold from SettingsDB, handling relative mode."""
         if self._settings is None:
             return 100.0
-        mode = self._settings.get("blur_mode", "fixed")
-        fixed = float(self._settings.get("blur_fixed_threshold", 100.0))
-        if mode != "relative":
-            return fixed
-        percent = float(self._settings.get("blur_relative_percent", 20.0))
-        all_photos = self._photo_repo.get_all()
-        scores = [p.blur_score for p in all_photos if p.blur_score is not None]
-        if not scores:
-            return fixed
-        return BlurService().relative_threshold(scores, percent)
+        return float(self._settings.get("blur_fixed_threshold", 100.0))
 
     def _current_photo_id(self) -> Optional[int]:
         if not self._ids:
