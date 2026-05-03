@@ -52,7 +52,7 @@ app/
 
 **UI 層 (`app/ui/`)：** `MainWindow` 控制 stacked widget 在 `WelcomeView`（拖放資料夾）與 `GridView`（縮圖格柵 + 篩選面板 + 預覽）之間切換。`LoupeView` 提供全螢幕單張檢視。
 
-**Core 層 (`app/core/`)：** `ImportService` 掃描資料夾並解析 EXIF；`ImportWorker` 用 QThread 在背景執行，透過 signals 與 UI 溝通。`TagService` 處理標記狀態（pick/reject/maybe）與色彩標籤。`ThumbnailService` 負責生成與快取縮圖。`BlurService` 用 OpenCV Laplacian 計算模糊分數（`Optional[float]`，None 代表無法讀取）；`BlurWorker` 在背景執行分析。`FilterService` 過濾照片，支援 status/color/blur 多選 OR 邏輯與 fixed/relative 兩種模糊閾值模式。`ScanService`/`ScanWorker` 背景偵測資料夾變更（新增/修改/消失）。
+**Core 層 (`app/core/`)：** `ImportService` 掃描資料夾並解析 EXIF；`ImportWorker` 用 QThread 在背景執行，透過 signals 與 UI 溝通。`TagService` 處理標記狀態（pick/reject/maybe）與色彩標籤。`ThumbnailService` 負責生成與快取縮圖。`BlurService` 用 OpenCV Laplacian 計算模糊分數（`Optional[float]`，None 代表無法讀取）；`BlurWorker` 在背景執行分析。`FilterService` 過濾照片，支援 status/color/blur 多選 OR 邏輯與固定閾值（`blur_fixed_threshold`）模糊篩選。`ScanService`/`ScanWorker` 背景偵測資料夾變更（新增/修改/消失）。
 
 **DB 層 (`app/db/`)：** `PhotoRepository` 與 `TagRepository` 封裝 SQL 操作。`connection.py` 初始化 WAL 模式 schema。`SettingsDB` 提供全域 key-value 設定儲存。Tags 採用 upsert 模式。
 
