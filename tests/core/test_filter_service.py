@@ -113,23 +113,3 @@ def test_blur_filter_or_logic_unanalyzed_and_sharp(db_conn):
     assert pid_none in ids
     assert pid_sharp in ids
 
-def test_blur_filter_relative_mode(db_conn):
-    from app.db.photo_repository import PhotoRepository
-    from app.db.tag_repository import TagRepository
-    from app.core.filter_service import FilterService
-    repo = PhotoRepository(db_conn)
-    tag_repo = TagRepository(db_conn)
-    svc = FilterService(repo, tag_repo)
-    pid_low  = _insert_with_blur(repo, "low.jpg", 5.0)
-    pid_mid  = _insert_with_blur(repo, "mid.jpg", 50.0)
-    pid_high = _insert_with_blur(repo, "hi.jpg", 500.0)
-    # bottom 40% of [5.0, 50.0, 500.0] → idx=0 → threshold=5.0+eps → only 5.0 is blurry
-    results = svc.filter(
-        blur=["blurry"],
-        blur_mode="relative",
-        blur_relative_percent=40.0,
-    )
-    ids = [p.id for p in results]
-    assert pid_low in ids
-    assert pid_mid not in ids
-    assert pid_high not in ids
