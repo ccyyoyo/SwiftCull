@@ -196,6 +196,7 @@ class GridView(QWidget):
         self._grid.photo_double_clicked.connect(self._on_loupe)
         self._grid.selection_changed.connect(self._on_selection_changed)
         self._grid.batch_status_requested.connect(self._on_batch_status)
+        self._grid.batch_color_requested.connect(self._on_batch_color)
         self._splitter.addWidget(self._grid)
 
         self._preview = _PreviewPane()
@@ -414,6 +415,16 @@ class GridView(QWidget):
             self._tag_svc.batch_clear_status(photo_ids)
         else:
             self._tag_svc.batch_set_status(photo_ids, status)
+        for pid in photo_ids:
+            self._grid.update_item_tag(pid)
+
+    def _on_batch_color(self, photo_ids: list, color: str):
+        if not photo_ids:
+            return
+        if color == "clear":
+            self._tag_svc.batch_clear_color(photo_ids)
+        else:
+            self._tag_svc.batch_set_color(photo_ids, color)
         for pid in photo_ids:
             self._grid.update_item_tag(pid)
 
