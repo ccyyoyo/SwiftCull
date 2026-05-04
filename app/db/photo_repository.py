@@ -85,6 +85,24 @@ class PhotoRepository:
         ).fetchall()
         return [int(r["id"]) for r in rows]
 
+    def get_exposure_unanalyzed_ids(self) -> list[int]:
+        """Return IDs where any exposure analysis field is NULL."""
+        rows = self._conn.execute(
+            "SELECT id FROM photos WHERE exposure_mean IS NULL"
+            " OR exposure_overexposed IS NULL"
+            " OR exposure_underexposed IS NULL"
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+
+    def clear_exposure_scores(self, photo_id: int) -> None:
+        """Clear stored exposure fields so the photo will be re-analyzed."""
+        self._conn.execute(
+            "UPDATE photos SET exposure_mean=NULL, exposure_overexposed=NULL,"
+            " exposure_underexposed=NULL WHERE id=?",
+            (photo_id,),
+        )
+        self._conn.commit()
+
     def get_all(self) -> List[Photo]:
         rows = self._conn.execute(
             "SELECT * FROM photos ORDER BY shot_at, filename"
