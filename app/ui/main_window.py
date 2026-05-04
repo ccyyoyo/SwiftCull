@@ -58,6 +58,8 @@ class MainWindow(QMainWindow):
 
     def _load_folder(self, folder_path: str):
         log.info("_load_folder starting: %s", folder_path)
+        if self._grid_view is not None:
+            self._grid_view.stop_blur_analysis()
         from app.db.connection import get_connection, init_db
         from app.db.photo_repository import PhotoRepository
         from app.db.tag_repository import TagRepository
@@ -154,12 +156,10 @@ class MainWindow(QMainWindow):
             log.info("Scan finished: %d missing files", len(missing))
             self._grid_view.set_missing_paths(missing)
 
-            # TODO: Blur reanalysis disabled (QThread issue with PySide6)
-            # if self._db_path:
-            #     log.info("Starting blur reanalysis after scan completes")
-            #     self._grid_view.reanalyze_missing_blur(self._db_path)
-
         if result is None or not result.has_changes:
+            if self._grid_view is not None and self._db_path:
+                log.info("Starting blur reanalysis for unanalyzed photos")
+                self._grid_view.reanalyze_missing_blur(self._db_path)
             return
         if self._grid_view is None:
             return
@@ -182,6 +182,9 @@ class MainWindow(QMainWindow):
                 on_dismiss=self._on_toast_dismissed,
             )
         else:
+            if self._db_path:
+                log.info("Starting blur reanalysis for unanalyzed photos")
+                self._grid_view.reanalyze_missing_blur(self._db_path)
             from app.ui.toast import show_info_toast
             self._toast = show_info_toast(
                 self._grid_view,
@@ -256,6 +259,8 @@ class MainWindow(QMainWindow):
         if self._import_ctrl is not None:
             self._import_ctrl.cancel()
             self._import_ctrl.wait(3000)
+        if self._grid_view is not None:
+            self._grid_view.stop_blur_analysis()
         try:
             self._settings.close()
         except Exception:

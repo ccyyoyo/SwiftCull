@@ -56,6 +56,17 @@ def test_is_blurry_fixed_mode_sharp(tmp_path):
     assert svc.is_blurry_fixed(score, threshold=10.0) is False
 
 
+def test_relative_threshold_ignores_none_and_selects_bottom_percentile():
+    from app.core.blur_service import BlurService
+
+    threshold = BlurService().relative_threshold(
+        [None, 5.0, 50.0, 500.0],
+        bottom_percent=40.0,
+    )
+
+    assert 5.0 < threshold < 50.0
+
+
 def test_compute_score_returns_none_for_missing_file(tmp_path):
     from app.core.blur_service import BlurService
     svc = BlurService()

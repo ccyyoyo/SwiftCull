@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Optional
+from typing import List, Optional
 
 log = logging.getLogger(__name__)
 
@@ -39,3 +39,12 @@ class BlurService:
         if score is None:
             return False
         return score < threshold
+
+    def relative_threshold(self, scores: List[Optional[float]], bottom_percent: float) -> float:
+        """Return threshold so photos in the bottom percentile are blurry."""
+        valid = [s for s in scores if s is not None]
+        if not valid:
+            return 0.0
+        sorted_scores = sorted(valid)
+        idx = max(0, int(len(sorted_scores) * bottom_percent / 100.0) - 1)
+        return sorted_scores[idx] + 1e-9

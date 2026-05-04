@@ -109,6 +109,7 @@ class LoupeView(QWidget):
                  filter_svc=None,
                  initial_statuses: Optional[list[str]] = None,
                  initial_colors: Optional[list[str]] = None,
+                 initial_blur: Optional[list[str]] = None,
                  settings=None,
                  parent=None):
         super().__init__(parent)
@@ -125,6 +126,7 @@ class LoupeView(QWidget):
         self._settings = settings  # SettingsDB instance, may be None
         self._statuses = list(initial_statuses) if initial_statuses else []
         self._colors = list(initial_colors) if initial_colors else []
+        self._blur = list(initial_blur) if initial_blur else []
         self._zoom = 1.0
         self._base_pixmap: QPixmap | None = None
 
@@ -327,9 +329,14 @@ class LoupeView(QWidget):
             return
 
         prev_id = self._ids[self._idx] if self._ids else None
+        mode, threshold, percent = self._blur_settings()
         new_photos = self._filter_svc.filter(
             statuses=self._statuses or None,
             colors=self._colors or None,
+            blur=self._blur or None,
+            blur_mode=mode,
+            blur_fixed_threshold=threshold,
+            blur_relative_percent=percent,
         )
         new_ids = [p.id for p in new_photos]
 
@@ -408,9 +415,23 @@ class LoupeView(QWidget):
         )
 
     def _resolve_blur_threshold(self) -> float:
+        mode, fixed, percent = self._blur_settings()
+        if mode != "relative":
+            return fixed
+        all_photos = self._photo_repo.get_all()
+        scores = [p.blur_score for p in all_photos if p.blur_score is not None]
+        if not scores:
+            return fixed
+        from app.core.blur_service import BlurService
+        return BlurService().relative_threshold(scores, percent)
+
+    def _blur_settings(self):
         if self._settings is None:
-            return 100.0
-        return float(self._settings.get("blur_fixed_threshold", 100.0))
+            return "fixed", 100.0, 20.0
+        mode = self._settings.get("blur_mode", "fixed")
+        fixed = float(self._settings.get("blur_fixed_threshold", 100.0))
+        percent = float(self._settings.get("blur_relative_percent", 20.0))
+        return mode, fixed, percent
 
     def _current_photo_id(self) -> Optional[int]:
         if not self._ids:

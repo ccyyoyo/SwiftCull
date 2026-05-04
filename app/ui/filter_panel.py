@@ -337,6 +337,7 @@ class FilterPanel(QWidget):
         if self._settings is None:
             return
         dlg = BlurSettingsDialog(self._settings, self)
+        dlg.settings_changed.connect(lambda *_: self._emit_filter())
         dlg.exec()
 
     def set_filter(self, statuses, colors):

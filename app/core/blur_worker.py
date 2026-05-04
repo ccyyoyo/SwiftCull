@@ -123,6 +123,11 @@ class BlurController(QObject):
     def cancel(self):
         self._worker.cancel()
 
+    def wait(self, timeout_ms: int = 5000) -> bool:
+        if self._thread is None:
+            return True
+        return self._thread.wait(timeout_ms)
+
     def _cleanup(self):
         self._worker.deleteLater()
         self._thread.deleteLater()
