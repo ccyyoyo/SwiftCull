@@ -66,13 +66,11 @@ def test_compute_scores_underexposed_low_mean_and_fraction(tmp_path):
     assert result.underexposed_fraction > 0.9
 
 
-def test_compute_scores_missing_file_returns_zeros(tmp_path):
+def test_compute_scores_missing_file_returns_none(tmp_path):
     from app.core.exposure_service import ExposureService
     svc = ExposureService()
     result = svc.compute_scores(str(tmp_path), "nonexistent.jpg")
-    assert result.mean_brightness == 0.0
-    assert result.overexposed_fraction == 0.0
-    assert result.underexposed_fraction == 0.0
+    assert result is None
 
 
 # ── is_overexposed / is_underexposed ───────────────────────────────────────────
