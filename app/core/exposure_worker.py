@@ -1,10 +1,13 @@
 """Background exposure analysis worker. Mirrors the BlurWorker pattern."""
 
+import logging
 import sqlite3
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from app.core.exposure_service import ExposureService
 from app.db.photo_repository import PhotoRepository
+
+log = logging.getLogger(__name__)
 
 
 class ExposureWorker(QObject):
@@ -25,8 +28,6 @@ class ExposureWorker(QObject):
 
     @Slot()
     def run(self):
-        import logging
-        log = logging.getLogger(__name__)
         log.info("ExposureWorker.run started")
         try:
             self._run_inner()
@@ -37,8 +38,6 @@ class ExposureWorker(QObject):
             self.finished.emit()
 
     def _run_inner(self):
-        import logging
-        log = logging.getLogger(__name__)
         log.info("ExposureWorker._run_inner started with %d photos", len(self._photo_ids))
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
@@ -89,27 +88,33 @@ class ExposureController(QObject):
     finished = Signal()
 
     def __init__(self, folder_path: str, db_path: str, photo_ids: list, parent=None):
-        import logging
-        self._log = logging.getLogger(__name__)
-        self._log.info("ExposureController.__init__ started")
-        super().__init__(parent)
-        self._worker = ExposureWorker(folder_path, db_path, photo_ids)
-        self._thread = None
-        self._log.info("ExposureController.__init__ completed")
+        log.info("ExposureController.__init__ started")
+        try:
+            super().__init__(parent)
+            self._worker = ExposureWorker(folder_path, db_path, photo_ids)
+            self._thread = None
+            log.info("ExposureController.__init__ completed")
+        except Exception as e:
+            log.exception("Error in ExposureController.__init__: %s", e)
+            raise
 
     def start(self):
-        self._log.info("ExposureController.start called")
-        if self._thread is None:
-            self._thread = QThread()
-            self._worker.moveToThread(self._thread)
-            self._thread.started.connect(self._worker.run)
-            self._worker.photo_exposure_updated.connect(self.photo_exposure_updated)
-            self._worker.progress.connect(self.progress)
-            self._worker.finished.connect(self._thread.quit)
-            self._thread.finished.connect(self.finished)
-            self._thread.finished.connect(self._cleanup)
-        self._thread.start()
-        self._log.info("ExposureController thread started")
+        log.info("ExposureController.start called")
+        try:
+            if self._thread is None:
+                self._thread = QThread()
+                self._worker.moveToThread(self._thread)
+                self._thread.started.connect(self._worker.run)
+                self._worker.photo_exposure_updated.connect(self.photo_exposure_updated)
+                self._worker.progress.connect(self.progress)
+                self._worker.finished.connect(self._thread.quit)
+                self._thread.finished.connect(self.finished)
+                self._thread.finished.connect(self._cleanup)
+            self._thread.start()
+            log.info("ExposureController thread started")
+        except Exception as e:
+            log.exception("Error in ExposureController.start: %s", e)
+            raise
 
     def cancel(self):
         self._worker.cancel()
