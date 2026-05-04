@@ -1,13 +1,5 @@
 import pytest
 import numpy as np
-import cv2
-
-
-def _make_jpeg(tmp_path, name, pixel_value):
-    arr = np.full((200, 200, 3), pixel_value, dtype=np.uint8)
-    path = tmp_path / name
-    cv2.imwrite(str(path), arr)
-    return str(path)
 
 
 def _photo(mean, over, under):
