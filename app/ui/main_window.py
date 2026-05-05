@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
         log.info("_load_folder starting: %s", folder_path)
         if self._grid_view is not None:
             self._grid_view.stop_blur_analysis()
+            self._grid_view.stop_exposure_analysis()
         from app.db.connection import get_connection, init_db
         from app.db.photo_repository import PhotoRepository
         from app.db.tag_repository import TagRepository
@@ -261,6 +262,7 @@ class MainWindow(QMainWindow):
             self._import_ctrl.wait(3000)
         if self._grid_view is not None:
             self._grid_view.stop_blur_analysis()
+            self._grid_view.stop_exposure_analysis()
         try:
             self._settings.close()
         except Exception:

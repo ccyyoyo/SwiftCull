@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QCheckBox,
-    QPushButton, QSizePolicy, QHBoxLayout
+    QPushButton, QSizePolicy, QHBoxLayout, QScrollArea
 )
 from PySide6.QtGui import QPainter, QColor, QPen, QFont
 from PySide6.QtCore import Signal, Qt, QRect
@@ -10,6 +10,8 @@ from app.utils.theme import (
     STATUS_ICON, STATUS_COLOR, COLOR_DOT,
     PICK_CLR, REJECT_CLR, MAYBE_CLR,
     BLUR_BLURRY, BLUR_SHARP, BLUR_UNKNOWN,
+    EXPOSURE_OVEREXPOSED, EXPOSURE_UNDEREXPOSED, EXPOSURE_BLACK,
+    EXPOSURE_NORMAL, EXPOSURE_UNKNOWN,
 )
 
 STATUSES = ["pick", "reject", "maybe", "untagged"]
@@ -57,7 +59,6 @@ class _ColorDotCheckBox(QWidget):
         p.drawEllipse(4, 5, 12, 12)
         # label
         p.setPen(QColor(TEXT_PRIMARY if self._checked else TEXT_SECONDARY))
-        from PySide6.QtGui import QFont
         p.setFont(QFont("Segoe UI", 10))
         p.drawText(QRect(22, 0, self.width() - 22, self.height()),
                    Qt.AlignVCenter | Qt.AlignLeft, self._color_key)
@@ -91,7 +92,6 @@ class _StatusCheckBox(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        from PySide6.QtGui import QFont
 
         if self._key == "untagged":
             icon_color = QColor(TEXT_MUTED)
@@ -175,7 +175,7 @@ class _CollapsedTab(QWidget):
 
 
 class FilterPanel(QWidget):
-    filter_changed = Signal(list, list, list)
+    filter_changed = Signal(list, list, list, list)  # statuses, colors, blur, exposure
 
     def __init__(self, settings=None, parent=None):
         super().__init__(parent)
@@ -184,6 +184,7 @@ class FilterPanel(QWidget):
         self._status_checks: dict[str, _StatusCheckBox] = {}
         self._color_checks: dict[str, _ColorDotCheckBox] = {}
         self._blur_checks: dict = {}
+        self._exposure_checks: dict = {}
 
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setStyleSheet(f"background:{BG_PANEL};")
@@ -231,13 +232,18 @@ class FilterPanel(QWidget):
         hrow.addWidget(self._toggle_btn)
         body_layout.addWidget(header)
 
-        # content
+        # scrollable content area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
         self._content = QWidget()
         cl = QVBoxLayout(self._content)
         cl.setContentsMargins(10, 8, 10, 8)
         cl.setSpacing(2)
 
-        # status section
+        # STATUS section
         sec1 = QLabel("STATUS")
         sec1.setStyleSheet(
             f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
@@ -251,7 +257,7 @@ class FilterPanel(QWidget):
 
         cl.addSpacing(8)
 
-        # color section
+        # COLOR section
         sec2 = QLabel("COLOR")
         sec2.setStyleSheet(
             f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
@@ -274,6 +280,7 @@ class FilterPanel(QWidget):
 
         cl.addSpacing(8)
 
+        # BLUR section
         sec3 = QLabel("BLUR")
         sec3.setStyleSheet(
             f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
@@ -296,17 +303,40 @@ class FilterPanel(QWidget):
         blur_header_l.addWidget(gear_btn)
         cl.addWidget(blur_header_w)
 
-        from PySide6.QtWidgets import QCheckBox as _QCB
         for blur_key, label in [("blurry", "模糊"), ("sharp", "清晰"), ("unanalyzed", "未分析")]:
-            cb = _QCB(label)
+            cb = QCheckBox(label)
             cb.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
             cb.stateChanged.connect(self._emit_filter)
             self._blur_checks[blur_key] = cb
             cl.addWidget(cb)
 
+        cl.addSpacing(8)
+
+        # EXPOSURE section
+        sec4 = QLabel("EXPOSURE")
+        sec4.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(sec4)
+
+        exposure_items = [
+            ("overexposed",  "過曝",  EXPOSURE_OVEREXPOSED),
+            ("underexposed", "欠曝",  EXPOSURE_UNDEREXPOSED),
+            ("black_frame",  "純黑",  EXPOSURE_BLACK),
+            ("normal",       "正常",  EXPOSURE_NORMAL),
+            ("unanalyzed",   "未分析", EXPOSURE_UNKNOWN),
+        ]
+        for exp_key, label, color in exposure_items:
+            cb = QCheckBox(label)
+            cb.setStyleSheet(f"color:{color}; font-size:10px;")
+            cb.stateChanged.connect(self._emit_filter)
+            self._exposure_checks[exp_key] = cb
+            cl.addWidget(cb)
+
         cl.addStretch()
 
-        body_layout.addWidget(self._content)
+        scroll.setWidget(self._content)
+        body_layout.addWidget(scroll, stretch=1)
         root.addWidget(self._panel_body)
 
     def _toggle(self):
@@ -324,12 +354,14 @@ class FilterPanel(QWidget):
         statuses = [s for s, cb in self._status_checks.items() if cb.isChecked()]
         colors = [c for c, cb in self._color_checks.items() if cb.isChecked()]
         blur = [k for k, cb in self._blur_checks.items() if cb.isChecked()]
-        self.filter_changed.emit(statuses, colors, blur)
+        exposure = [k for k, cb in self._exposure_checks.items() if cb.isChecked()]
+        self.filter_changed.emit(statuses, colors, blur, exposure)
 
     def _clear_all(self):
         for cb in (list(self._status_checks.values())
                    + list(self._color_checks.values())
-                   + list(self._blur_checks.values())):
+                   + list(self._blur_checks.values())
+                   + list(self._exposure_checks.values())):
             cb.setChecked(False)
 
     def _open_blur_settings(self):

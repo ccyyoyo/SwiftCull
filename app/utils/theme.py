@@ -23,6 +23,12 @@ BLUR_BLURRY  = "#FF6B6B"   # red-ish — indicates blur warning
 BLUR_SHARP   = "#3ddc84"   # green — same as PICK_CLR
 BLUR_UNKNOWN = "#555555"   # muted — unanalyzed
 
+EXPOSURE_OVEREXPOSED  = "#FFB347"  # warm amber
+EXPOSURE_UNDEREXPOSED = "#64B5F6"  # cool blue
+EXPOSURE_BLACK        = "#FF4D4D"  # red
+EXPOSURE_NORMAL       = "#3ddc84"  # muted green
+EXPOSURE_UNKNOWN      = "#555555"  # muted gray
+
 STATUS_ICON = {"pick": "✓", "reject": "✗", "maybe": "?"}
 STATUS_COLOR = {"pick": PICK_CLR, "reject": REJECT_CLR, "maybe": MAYBE_CLR}
 

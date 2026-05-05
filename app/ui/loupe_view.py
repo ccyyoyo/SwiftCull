@@ -110,6 +110,7 @@ class LoupeView(QWidget):
                  initial_statuses: Optional[list[str]] = None,
                  initial_colors: Optional[list[str]] = None,
                  initial_blur: Optional[list[str]] = None,
+                 initial_exposure: Optional[list[str]] = None,
                  settings=None,
                  parent=None):
         super().__init__(parent)
@@ -127,6 +128,7 @@ class LoupeView(QWidget):
         self._statuses = list(initial_statuses) if initial_statuses else []
         self._colors = list(initial_colors) if initial_colors else []
         self._blur = list(initial_blur) if initial_blur else []
+        self._exposure = list(initial_exposure) if initial_exposure else []
         self._zoom = 1.0
         self._base_pixmap: QPixmap | None = None
 
@@ -162,8 +164,19 @@ class LoupeView(QWidget):
         )
         self._blur_label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._blur_label.setParent(self)
-        self._blur_label.resize(200, 30)
+        self._blur_label.resize(260, 30)
         self._blur_label.raise_()
+
+        # --- exposure label overlay (top-right, below blur) ---
+        self._exposure_label = QLabel("")
+        self._exposure_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._exposure_label.setStyleSheet(
+            "color: #aaa; font-size: 13px; background: transparent; padding: 4px;"
+        )
+        self._exposure_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._exposure_label.setParent(self)
+        self._exposure_label.resize(260, 30)
+        self._exposure_label.raise_()
 
         # --- bottom toolbar (auto-hide) ---
         self._toolbar = QWidget(self)
@@ -235,7 +248,8 @@ class LoupeView(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._position_chrome()
-        self._blur_label.move(self.width() - 210, 16)
+        self._blur_label.move(self.width() - 270, 16)
+        self._exposure_label.move(self.width() - 270, 46)
 
     def _position_chrome(self):
         bottom_h = 56
@@ -320,6 +334,7 @@ class LoupeView(QWidget):
             self._apply_zoom()
         self._update_status_label()
         self._update_blur_label()
+        self._update_exposure_label()
 
     def _on_filter_changed(self, statuses: list, colors: list):
         self._statuses = list(statuses)
@@ -330,13 +345,18 @@ class LoupeView(QWidget):
 
         prev_id = self._ids[self._idx] if self._ids else None
         mode, threshold, percent = self._blur_settings()
+        clip, black_mean, black_shadow = self._exposure_settings()
         new_photos = self._filter_svc.filter(
             statuses=self._statuses or None,
             colors=self._colors or None,
             blur=self._blur or None,
+            exposure=self._exposure or None,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
+            exposure_clip_threshold=clip,
+            exposure_black_mean_threshold=black_mean,
+            exposure_black_shadow_threshold=black_shadow,
         )
         new_ids = [p.id for p in new_photos]
 
@@ -432,6 +452,59 @@ class LoupeView(QWidget):
         fixed = float(self._settings.get("blur_fixed_threshold", 100.0))
         percent = float(self._settings.get("blur_relative_percent", 20.0))
         return mode, fixed, percent
+
+    def _exposure_settings(self):
+        if self._settings is None:
+            return 0.01, 8.0, 0.90
+        clip = float(self._settings.get("exposure_clip_threshold", 0.01))
+        black_mean = float(self._settings.get("exposure_black_mean_threshold", 8.0))
+        black_shadow = float(self._settings.get("exposure_black_shadow_threshold", 0.90))
+        return clip, black_mean, black_shadow
+
+    def _update_exposure_label(self):
+        from app.utils.theme import (
+            EXPOSURE_OVEREXPOSED, EXPOSURE_UNDEREXPOSED, EXPOSURE_BLACK,
+            EXPOSURE_NORMAL, EXPOSURE_UNKNOWN,
+        )
+        from app.core.exposure_service import ExposureService
+
+        if not self._ids:
+            self._exposure_label.setText("")
+            return
+
+        photo_id = self._ids[self._idx]
+        photo = self._photo_repo.get_by_id(photo_id)
+        if photo is None:
+            self._exposure_label.setText("")
+            return
+
+        clip, black_mean, black_shadow = self._exposure_settings()
+        display = ExposureService.exposure_display_state(
+            photo,
+            clip_threshold=clip,
+            black_mean_threshold=black_mean,
+            black_shadow_threshold=black_shadow,
+        )
+
+        if display == "unanalyzed":
+            text, color = "Exposure: —", EXPOSURE_UNKNOWN
+        elif display == "normal":
+            text, color = "Exposure: OK", EXPOSURE_NORMAL
+        elif display == "overexposed":
+            pct = (photo.exposure_overexposed or 0.0) * 100
+            text, color = f"Exposure: Over {pct:.1f}%", EXPOSURE_OVEREXPOSED
+        elif display == "underexposed":
+            pct = (photo.exposure_underexposed or 0.0) * 100
+            text, color = f"Exposure: Under {pct:.1f}%", EXPOSURE_UNDEREXPOSED
+        elif display == "black_frame":
+            text, color = "Exposure: Black", EXPOSURE_BLACK
+        else:
+            text, color = "Exposure: —", EXPOSURE_UNKNOWN
+
+        self._exposure_label.setText(text)
+        self._exposure_label.setStyleSheet(
+            f"color:{color}; font-size:13px; background:transparent; padding:4px;"
+        )
 
     def _current_photo_id(self) -> Optional[int]:
         if not self._ids:

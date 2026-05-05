@@ -77,7 +77,9 @@ class GridView(QWidget):
         self._filter_svc = filter_svc
         self._settings = settings  # SettingsDB instance
         self._current_blur = None
+        self._current_exposure = None
         self._blur_ctrl = None
+        self._exposure_ctrl = None
         self._db_path: str = ""
         self._selected_ids: list[int] = []
         self._current_statuses = None
@@ -174,6 +176,20 @@ class GridView(QWidget):
         )
         self._analyse_btn.clicked.connect(self._on_analyse_clicked)
         tb.addWidget(self._analyse_btn)
+
+        self._exposure_btn = QPushButton("◉  分析曝光")
+        self._exposure_btn.setCursor(Qt.PointingHandCursor)
+        self._exposure_btn.setToolTip("分析尚未計算曝光分數的照片")
+        self._exposure_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ background:#2a2a2a; color:#ddd;"
+            f" border-color:#555; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#222; }}"
+        )
+        self._exposure_btn.clicked.connect(self._on_exposure_clicked)
+        tb.addWidget(self._exposure_btn)
 
         self._split_btn = QPushButton("⊟  分割預覽")
         self._split_btn.setCheckable(True)
@@ -290,19 +306,24 @@ class GridView(QWidget):
             self._preview.clear()
             self._split_btn.setText("⊟  分割預覽")
 
-    def _refresh(self, statuses=None, colors=None, blur=None,
+    def _refresh(self, statuses=None, colors=None, blur=None, exposure=None,
                  blur_mode=None, blur_fixed_threshold=None,
                  blur_relative_percent=None):
         self._current_statuses = statuses
         self._current_colors = colors
         self._current_blur = blur
+        self._current_exposure = exposure
         if blur_mode is None or blur_fixed_threshold is None or blur_relative_percent is None:
             blur_mode, blur_fixed_threshold, blur_relative_percent = self._blur_settings()
+        clip, black_mean, black_shadow = self._exposure_settings()
         photos = self._filter_svc.filter(
-            statuses=statuses, colors=colors, blur=blur,
+            statuses=statuses, colors=colors, blur=blur, exposure=exposure,
             blur_mode=blur_mode,
             blur_fixed_threshold=blur_fixed_threshold,
             blur_relative_percent=blur_relative_percent,
+            exposure_clip_threshold=clip,
+            exposure_black_mean_threshold=black_mean,
+            exposure_black_shadow_threshold=black_shadow,
         )
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
 
@@ -311,6 +332,12 @@ class GridView(QWidget):
         threshold = float(self._settings.get("blur_fixed_threshold", 100.0))
         percent = float(self._settings.get("blur_relative_percent", 20.0))
         return mode, threshold, percent
+
+    def _exposure_settings(self):
+        clip = float(self._settings.get("exposure_clip_threshold", 0.01))
+        black_mean = float(self._settings.get("exposure_black_mean_threshold", 8.0))
+        black_shadow = float(self._settings.get("exposure_black_shadow_threshold", 0.90))
+        return clip, black_mean, black_shadow
 
     def begin_import(self, total: int):
         self._import_total = total
@@ -438,11 +465,12 @@ class GridView(QWidget):
             return
         ErrorListDialog(self._import_errors, self).exec()
 
-    def _on_filter_changed(self, statuses, colors, blur):
+    def _on_filter_changed(self, statuses, colors, blur, exposure):
         self._current_blur = blur or None
+        self._current_exposure = exposure or None
         mode, threshold, percent = self._blur_settings()
         self._refresh(
-            statuses or None, colors or None, blur or None,
+            statuses or None, colors or None, blur or None, exposure or None,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -495,13 +523,18 @@ class GridView(QWidget):
     def _on_loupe(self, photo_id: int):
         from app.ui.loupe_view import LoupeView
         mode, threshold, percent = self._blur_settings()
+        clip, black_mean, black_shadow = self._exposure_settings()
         photos = self._filter_svc.filter(
             statuses=self._current_statuses,
             colors=self._current_colors,
             blur=self._current_blur,
+            exposure=self._current_exposure,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
+            exposure_clip_threshold=clip,
+            exposure_black_mean_threshold=black_mean,
+            exposure_black_shadow_threshold=black_shadow,
         )
         photo_ids = [p.id for p in photos]
         if photo_id not in photo_ids:
@@ -514,6 +547,7 @@ class GridView(QWidget):
             initial_statuses=self._current_statuses,
             initial_colors=self._current_colors,
             initial_blur=self._current_blur,
+            initial_exposure=self._current_exposure,
             settings=self._settings,
         )
         loupe.tag_changed.connect(self._grid.update_item_tag)
@@ -526,7 +560,7 @@ class GridView(QWidget):
         self._filter_panel.set_filter(statuses, colors)
         mode, threshold, percent = self._blur_settings()
         self._refresh(
-            statuses or None, colors or None, self._current_blur,
+            statuses or None, colors or None, self._current_blur, self._current_exposure,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -594,6 +628,43 @@ class GridView(QWidget):
 
     def stop_blur_analysis(self, timeout_ms: int = 3000):
         ctrl = self._blur_ctrl
+        if ctrl is None:
+            return
+        ctrl.cancel()
+        ctrl.wait(timeout_ms)
+
+    def _on_exposure_clicked(self):
+        if self._db_path:
+            self._start_exposure_analysis(self._db_path)
+
+    def _start_exposure_analysis(self, db_path: str):
+        import sqlite3 as _sq
+        from app.core.exposure_worker import ExposureController
+        from app.db.photo_repository import PhotoRepository as _PR
+        if self._exposure_ctrl is not None:
+            return
+        conn = _sq.connect(db_path)
+        conn.row_factory = _sq.Row
+        repo = _PR(conn)
+        photo_ids = repo.get_exposure_unanalyzed_ids()
+        conn.close()
+        if not photo_ids:
+            return
+        self._exposure_btn.setEnabled(False)
+        self._exposure_ctrl = ExposureController(self._folder, db_path, photo_ids)
+        self._exposure_ctrl.photo_exposure_updated.connect(self._on_photo_exposure_updated)
+        self._exposure_ctrl.finished.connect(self._on_exposure_finished)
+        self._exposure_ctrl.start()
+
+    def _on_photo_exposure_updated(self, photo_id: int, mean: float, over: float, under: float):
+        self._grid.update_item_tag(photo_id)
+
+    def _on_exposure_finished(self):
+        self._exposure_ctrl = None
+        self._exposure_btn.setEnabled(True)
+
+    def stop_exposure_analysis(self, timeout_ms: int = 3000):
+        ctrl = self._exposure_ctrl
         if ctrl is None:
             return
         ctrl.cancel()
