@@ -65,10 +65,14 @@ class ExportDialog(QDialog):
         status_group = QGroupBox("匯出哪些照片")
         sg = QHBoxLayout(status_group)
         self._chk_pick = QCheckBox("Pick")
+        self._chk_pick.setObjectName("export_pick_checkbox")
         self._chk_pick.setChecked(True)
         self._chk_reject = QCheckBox("Reject")
+        self._chk_reject.setObjectName("export_reject_checkbox")
         self._chk_maybe = QCheckBox("Maybe")
+        self._chk_maybe.setObjectName("export_maybe_checkbox")
         self._chk_none = QCheckBox("未標記")
+        self._chk_none.setObjectName("export_untagged_checkbox")
         for chk in (self._chk_pick, self._chk_reject, self._chk_maybe, self._chk_none):
             chk.stateChanged.connect(self._update_count)
             sg.addWidget(chk)
@@ -95,8 +99,10 @@ class ExportDialog(QDialog):
         dg = QHBoxLayout(dest_group)
         self._dest_edit = QLineEdit()
         self._dest_edit.setPlaceholderText("選擇目標資料夾…")
+        self._dest_edit.setObjectName("export_destination_input")
         self._dest_edit.textChanged.connect(self._update_count)
         browse_btn = QPushButton("瀏覽")
+        browse_btn.setObjectName("export_browse_button")
         browse_btn.setFixedWidth(60)
         browse_btn.clicked.connect(self._browse)
         dg.addWidget(self._dest_edit)
@@ -105,6 +111,7 @@ class ExportDialog(QDialog):
 
         # ---- count label ----
         self._count_label = QLabel("")
+        self._count_label.setObjectName("export_count_label")
         self._count_label.setAlignment(Qt.AlignCenter)
         self._count_label.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
         layout.addWidget(self._count_label)
@@ -117,6 +124,7 @@ class ExportDialog(QDialog):
 
         # ---- result label (hidden until done) ----
         self._result_label = QLabel("")
+        self._result_label.setObjectName("export_result_label")
         self._result_label.setAlignment(Qt.AlignCenter)
         self._result_label.hide()
         layout.addWidget(self._result_label)
@@ -125,8 +133,10 @@ class ExportDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         self._cancel_btn = QPushButton("取消")
+        self._cancel_btn.setObjectName("export_cancel_button")
         self._cancel_btn.clicked.connect(self.reject)
         self._ok_btn = QPushButton("開始匯出")
+        self._ok_btn.setObjectName("export_start_button")
         self._ok_btn.setDefault(True)
         self._ok_btn.clicked.connect(self._start_export)
         btn_row.addWidget(self._cancel_btn)

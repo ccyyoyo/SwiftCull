@@ -137,6 +137,7 @@ class LoupeView(QWidget):
         layout.setSpacing(0)
 
         self._img_label = QLabel()
+        self._img_label.setObjectName("loupe_image_label")
         self._img_label.setAlignment(Qt.AlignCenter)
         self._img_label.setStyleSheet("background: black;")
         self._img_label.setMouseTracking(True)
@@ -144,6 +145,7 @@ class LoupeView(QWidget):
 
         # --- status indicator ---
         self._status_label = QLabel("")
+        self._status_label.setObjectName("loupe_status_label")
         self._status_label.setAlignment(Qt.AlignCenter)
         self._status_label.setStyleSheet(
             "color: white; font-size: 18px; font-weight: bold;"
@@ -158,6 +160,7 @@ class LoupeView(QWidget):
 
         # --- blur score overlay (top-right) ---
         self._blur_label = QLabel("")
+        self._blur_label.setObjectName("loupe_blur_label")
         self._blur_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._blur_label.setStyleSheet(
             "color: #aaa; font-size: 13px; background: transparent; padding: 4px;"
@@ -169,6 +172,7 @@ class LoupeView(QWidget):
 
         # --- exposure label overlay (top-right, below blur) ---
         self._exposure_label = QLabel("")
+        self._exposure_label.setObjectName("loupe_exposure_label")
         self._exposure_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._exposure_label.setStyleSheet(
             "color: #aaa; font-size: 13px; background: transparent; padding: 4px;"
@@ -187,11 +191,13 @@ class LoupeView(QWidget):
 
         for label, status in [("P  Pick", "pick"), ("R  Reject", "reject"), ("M  Maybe", "maybe")]:
             btn = QPushButton(label)
+            btn.setObjectName(f"loupe_status_{status}_button")
             btn.setStyleSheet("color: white; background: #333; padding: 6px 16px;")
             btn.clicked.connect(lambda checked, s=status: self._set_status(s))
             tb_layout.addWidget(btn)
 
         clear_status_btn = QPushButton("U  清除")
+        clear_status_btn.setObjectName("loupe_status_clear_button")
         clear_status_btn.setStyleSheet("color: white; background: #444; padding: 6px 12px;")
         clear_status_btn.setToolTip("清除標記 (U)")
         clear_status_btn.clicked.connect(self._clear_status)
@@ -216,6 +222,7 @@ class LoupeView(QWidget):
 
         tb_layout.addStretch()
         close_btn = QPushButton("關閉 (Esc)")
+        close_btn.setObjectName("loupe_close_button")
         close_btn.setStyleSheet("color: white; background: #555; padding: 6px 16px;")
         close_btn.clicked.connect(self.close)
         tb_layout.addWidget(close_btn)

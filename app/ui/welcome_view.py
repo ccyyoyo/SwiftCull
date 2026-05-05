@@ -129,6 +129,7 @@ class WelcomeView(QWidget):
         layout.addSpacing(12)
 
         self._btn = QPushButton("開啟資料夾")
+        self._btn.setObjectName("welcome_open_folder_button")
         self._btn.setFixedWidth(160)
         self._btn.setFixedHeight(36)
         self._btn.setStyleSheet(
@@ -163,6 +164,7 @@ class WelcomeView(QWidget):
         self._recent_scroll.setMaximumWidth(560)
 
         self._recent_container = QWidget()
+        self._recent_container.setObjectName("welcome_recent_projects_container")
         self._recent_container.setStyleSheet("background:transparent;")
         self._recent_layout = QVBoxLayout(self._recent_container)
         self._recent_layout.setContentsMargins(0, 4, 0, 4)

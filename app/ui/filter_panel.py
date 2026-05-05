@@ -222,6 +222,7 @@ class FilterPanel(QWidget):
         hrow.addWidget(title_lbl)
         hrow.addStretch()
         self._toggle_btn = QPushButton("«")
+        self._toggle_btn.setObjectName("filter_toggle_button")
         self._toggle_btn.setFixedSize(24, 24)
         self._toggle_btn.setStyleSheet(
             f"background:transparent; color:{TEXT_SECONDARY}; border:none;"
@@ -251,6 +252,7 @@ class FilterPanel(QWidget):
         cl.addWidget(sec1)
         for s in STATUSES:
             cb = _StatusCheckBox(s)
+            cb.setObjectName(f"filter_status_{s}")
             cb.stateChanged.connect(self._emit_filter)
             self._status_checks[s] = cb
             cl.addWidget(cb)
@@ -265,12 +267,14 @@ class FilterPanel(QWidget):
         cl.addWidget(sec2)
         for c in COLORS:
             cb = _ColorDotCheckBox(c)
+            cb.setObjectName(f"filter_color_{c}")
             cb.stateChanged.connect(self._emit_filter)
             self._color_checks[c] = cb
             cl.addWidget(cb)
 
         cl.addSpacing(8)
         clear_btn = QPushButton("清除篩選")
+        clear_btn.setObjectName("filter_clear_button")
         clear_btn.setStyleSheet(
             f"background:transparent; color:{TEXT_SECONDARY}; border:1px solid #333;"
             f" border-radius:3px; padding:4px 8px; font-size:10px;"
@@ -305,6 +309,7 @@ class FilterPanel(QWidget):
 
         for blur_key, label in [("blurry", "模糊"), ("sharp", "清晰"), ("unanalyzed", "未分析")]:
             cb = QCheckBox(label)
+            cb.setObjectName(f"filter_blur_{blur_key}")
             cb.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
             cb.stateChanged.connect(self._emit_filter)
             self._blur_checks[blur_key] = cb
@@ -328,6 +333,7 @@ class FilterPanel(QWidget):
         ]
         for exp_key, label, color in exposure_items:
             cb = QCheckBox(label)
+            cb.setObjectName(f"filter_exposure_{exp_key}")
             cb.setStyleSheet(f"color:{color}; font-size:10px;")
             cb.stateChanged.connect(self._emit_filter)
             self._exposure_checks[exp_key] = cb

@@ -97,6 +97,7 @@ class GridView(QWidget):
 
         # left filter panel
         self._filter_panel = FilterPanel(settings=self._settings)
+        self._filter_panel.setObjectName("grid_filter_panel")
         self._filter_panel.filter_changed.connect(self._on_filter_changed)
         root.addWidget(self._filter_panel)
 
@@ -115,6 +116,7 @@ class GridView(QWidget):
         tb.setContentsMargins(10, 0, 10, 0)
 
         self._import_label = QLabel("")
+        self._import_label.setObjectName("grid_import_label")
         self._import_label.setStyleSheet(
             f"color:{TEXT_SECONDARY}; font-size:10px;"
         )
@@ -123,6 +125,7 @@ class GridView(QWidget):
         tb.addStretch()
 
         self._import_progress = QProgressBar()
+        self._import_progress.setObjectName("grid_import_progress")
         self._import_progress.setFixedWidth(220)
         self._import_progress.setFixedHeight(14)
         self._import_progress.setTextVisible(False)
@@ -150,6 +153,7 @@ class GridView(QWidget):
         tb.addWidget(self._cancel_btn)
 
         self._refresh_btn = QPushButton("↻  重新掃描")
+        self._refresh_btn.setObjectName("grid_refresh_button")
         self._refresh_btn.setCursor(Qt.PointingHandCursor)
         self._refresh_btn.setToolTip("重新掃描資料夾，找出新增 / 修改的檔案")
         self._refresh_btn.setStyleSheet(
@@ -164,6 +168,7 @@ class GridView(QWidget):
         tb.addWidget(self._refresh_btn)
 
         self._analyse_btn = QPushButton("⊙  分析模糊")
+        self._analyse_btn.setObjectName("grid_analyze_blur_button")
         self._analyse_btn.setCursor(Qt.PointingHandCursor)
         self._analyse_btn.setToolTip("分析尚未計算模糊分數的照片")
         self._analyse_btn.setStyleSheet(
@@ -178,6 +183,7 @@ class GridView(QWidget):
         tb.addWidget(self._analyse_btn)
 
         self._exposure_btn = QPushButton("◉  分析曝光")
+        self._exposure_btn.setObjectName("grid_analyze_exposure_button")
         self._exposure_btn.setCursor(Qt.PointingHandCursor)
         self._exposure_btn.setToolTip("分析尚未計算曝光分數的照片")
         self._exposure_btn.setStyleSheet(
@@ -192,6 +198,7 @@ class GridView(QWidget):
         tb.addWidget(self._exposure_btn)
 
         self._split_btn = QPushButton("⊟  分割預覽")
+        self._split_btn.setObjectName("grid_split_preview_button")
         self._split_btn.setCheckable(True)
         self._split_btn.setStyleSheet(
             f"background:transparent; color:{TEXT_SECONDARY}; border:1px solid #333;"
@@ -202,6 +209,7 @@ class GridView(QWidget):
         tb.addWidget(self._split_btn)
 
         self._export_btn = QPushButton("↗  匯出")
+        self._export_btn.setObjectName("grid_export_button")
         self._export_btn.setCursor(Qt.PointingHandCursor)
         self._export_btn.setToolTip("將 Picked / Rejected 等照片複製或移動到指定資料夾")
         self._export_btn.setStyleSheet(
@@ -223,6 +231,7 @@ class GridView(QWidget):
         )
 
         self._grid = ThumbnailGrid()
+        self._grid.setObjectName("grid_thumbnail_grid")
         self._grid.photo_double_clicked.connect(self._on_loupe)
         self._grid.selection_changed.connect(self._on_selection_changed)
         self._grid.batch_status_requested.connect(self._on_batch_status)
@@ -252,6 +261,7 @@ class GridView(QWidget):
         )
 
         self._select_all_btn = QPushButton("全選")
+        self._select_all_btn.setObjectName("grid_select_all_button")
         self._select_all_btn.setFixedHeight(18)
         self._select_all_btn.setCursor(Qt.PointingHandCursor)
         self._select_all_btn.setStyleSheet(_btn_style)
@@ -259,6 +269,7 @@ class GridView(QWidget):
         sb.addWidget(self._select_all_btn)
 
         self._deselect_btn = QPushButton("取消全選")
+        self._deselect_btn.setObjectName("grid_deselect_all_button")
         self._deselect_btn.setFixedHeight(18)
         self._deselect_btn.setCursor(Qt.PointingHandCursor)
         self._deselect_btn.setStyleSheet(_btn_style)
@@ -267,6 +278,7 @@ class GridView(QWidget):
         sb.addWidget(self._deselect_btn)
 
         self._selection_label = QLabel("")
+        self._selection_label.setObjectName("grid_selection_label")
         self._selection_label.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
         self._selection_label.hide()
         sb.addWidget(self._selection_label)

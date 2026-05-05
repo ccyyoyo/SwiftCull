@@ -1,21 +1,22 @@
-import sys
+import pytest
 
-from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QStackedWidget
 
 from app.ui.main_window import MainWindow
 from app.ui.welcome_view import WelcomeView
 
 
-def test_main_window_starts_on_welcome_view(tmp_path, monkeypatch):
+@pytest.mark.smoke
+@pytest.mark.gui
+def test_main_window_starts_on_welcome_view(tmp_path, monkeypatch, qtbot):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
 
-    app = QApplication.instance() or QApplication(sys.argv)
     window = MainWindow()
+    qtbot.addWidget(window)
     try:
         window.show()
-        app.processEvents()
+        qtbot.waitExposed(window)
 
         stack = window.findChild(QStackedWidget)
         assert stack is not None
@@ -23,4 +24,3 @@ def test_main_window_starts_on_welcome_view(tmp_path, monkeypatch):
         assert window.windowTitle() == "SwiftCull"
     finally:
         window.close()
-        app.processEvents()
