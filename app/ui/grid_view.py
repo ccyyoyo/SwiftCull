@@ -184,6 +184,20 @@ class GridView(QWidget):
         )
         self._split_btn.clicked.connect(self._toggle_split)
         tb.addWidget(self._split_btn)
+
+        self._export_btn = QPushButton("↗  匯出")
+        self._export_btn.setCursor(Qt.PointingHandCursor)
+        self._export_btn.setToolTip("將 Picked / Rejected 等照片複製或移動到指定資料夾")
+        self._export_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ background:#2a2a2a; color:#ddd;"
+            f" border-color:#555; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#222; }}"
+        )
+        self._export_btn.clicked.connect(self._on_export_clicked)
+        tb.addWidget(self._export_btn)
         center_layout.addWidget(self._top_bar)
 
         # splitter: thumbnail grid | preview pane
@@ -584,3 +598,8 @@ class GridView(QWidget):
             return
         ctrl.cancel()
         ctrl.wait(timeout_ms)
+
+    def _on_export_clicked(self):
+        from app.ui.export_dialog import ExportDialog
+        dlg = ExportDialog(self._folder, self._photo_repo, self._tag_repo, self)
+        dlg.exec()
