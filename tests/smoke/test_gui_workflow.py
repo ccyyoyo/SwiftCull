@@ -9,6 +9,7 @@ from app.db.photo_repository import PhotoRepository
 from app.ui.export_dialog import ExportDialog
 from app.ui.filter_panel import FilterPanel
 from app.ui.grid_view import GridView
+from app.ui.loupe_view import LoupeView
 
 from .conftest import (
     find_required,
@@ -131,6 +132,37 @@ def test_export_dialog_exports_picked_photo(loaded_main_window, tmp_path, qtbot)
 
     assert (dest / first.filename).exists()
     dialog.close()
+
+
+def test_loupe_keyboard_tagging_and_close(loaded_main_window, qtbot):
+    window = loaded_main_window
+    grid = _grid_view(window)
+    photo_ids = _photo_ids(window)
+    first_id = photo_ids[0]
+
+    loupe = LoupeView(
+        photo_ids,
+        0,
+        window._folder_path,
+        window._photo_repo,
+        grid._tag_repo,
+        grid._tag_svc,
+        filter_svc=grid._filter_svc,
+        settings=grid._settings,
+    )
+    qtbot.addWidget(loupe)
+    loupe.show()
+    qtbot.waitExposed(loupe)
+
+    qtbot.keyClick(loupe, Qt.Key_P)
+    tag = grid._tag_repo.get_by_photo_id(first_id)
+    assert tag is not None and tag.status == "pick"
+
+    assert loupe.findChild(QLabel, "loupe_blur_label") is not None
+    assert loupe.findChild(QLabel, "loupe_exposure_label") is not None
+
+    with qtbot.waitSignal(loupe.closed, timeout=3000):
+        qtbot.keyClick(loupe, Qt.Key_Escape)
 
 
 def test_project_db_can_be_reopened_after_gui_import(loaded_main_window):
