@@ -133,3 +133,39 @@ def test_blur_filter_relative_mode(db_conn):
     assert pid_mid not in ids
     assert pid_high not in ids
 
+
+def test_filter_group_member_ids_restricts_results(db_conn):
+    p1 = _insert_photo(db_conn, "g1.jpg")
+    p2 = _insert_photo(db_conn, "g2.jpg")
+    p3 = _insert_photo(db_conn, "g3.jpg")
+    svc = FilterService(PhotoRepository(db_conn), TagRepository(db_conn))
+    result = svc.filter(group_member_ids=frozenset({p1, p2}))
+    ids = {p.id for p in result}
+    assert p1 in ids
+    assert p2 in ids
+    assert p3 not in ids
+
+
+def test_filter_group_member_ids_none_returns_all(db_conn):
+    p1 = _insert_photo(db_conn, "a1.jpg")
+    p2 = _insert_photo(db_conn, "a2.jpg")
+    svc = FilterService(PhotoRepository(db_conn), TagRepository(db_conn))
+    result = svc.filter(group_member_ids=None)
+    ids = {p.id for p in result}
+    assert p1 in ids and p2 in ids
+
+
+def test_filter_group_member_ids_combined_with_status(db_conn):
+    p1 = _insert_photo(db_conn, "s1.jpg")
+    p2 = _insert_photo(db_conn, "s2.jpg")
+    p3 = _insert_photo(db_conn, "s3.jpg")
+    TagService(TagRepository(db_conn)).set_status(p1, "pick")
+    TagService(TagRepository(db_conn)).set_status(p2, "pick")
+    svc = FilterService(PhotoRepository(db_conn), TagRepository(db_conn))
+    # p3 is in group but not picked; p1 is picked but not in group
+    result = svc.filter(statuses=["pick"], group_member_ids=frozenset({p2, p3}))
+    ids = {p.id for p in result}
+    assert p2 in ids
+    assert p1 not in ids
+    assert p3 not in ids
+
