@@ -78,8 +78,10 @@ class GridView(QWidget):
         self._settings = settings  # SettingsDB instance
         self._current_blur = None
         self._current_exposure = None
+        self._current_group_id = None
         self._blur_ctrl = None
         self._exposure_ctrl = None
+        self._phash_ctrl = None
         self._db_path: str = ""
         self._selected_ids: list[int] = []
         self._current_statuses = None
@@ -99,6 +101,7 @@ class GridView(QWidget):
         self._filter_panel = FilterPanel(settings=self._settings)
         self._filter_panel.setObjectName("grid_filter_panel")
         self._filter_panel.filter_changed.connect(self._on_filter_changed)
+        self._filter_panel.group_selected.connect(self._on_group_selected)
         root.addWidget(self._filter_panel)
 
         # center: toolbar + splitter
@@ -181,6 +184,21 @@ class GridView(QWidget):
         )
         self._analyse_btn.clicked.connect(self._on_analyse_clicked)
         tb.addWidget(self._analyse_btn)
+
+        self._phash_btn = QPushButton("◈  找相似")
+        self._phash_btn.setObjectName("grid_find_similar_button")
+        self._phash_btn.setCursor(Qt.PointingHandCursor)
+        self._phash_btn.setToolTip("計算感知哈希，找出相似或重複的照片並分組")
+        self._phash_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ background:#2a2a2a; color:#ddd;"
+            f" border-color:#555; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#222; }}"
+        )
+        self._phash_btn.clicked.connect(self._on_phash_clicked)
+        tb.addWidget(self._phash_btn)
 
         self._exposure_btn = QPushButton("◉  分析曝光")
         self._exposure_btn.setObjectName("grid_analyze_exposure_button")
@@ -320,7 +338,7 @@ class GridView(QWidget):
 
     def _refresh(self, statuses=None, colors=None, blur=None, exposure=None,
                  blur_mode=None, blur_fixed_threshold=None,
-                 blur_relative_percent=None):
+                 blur_relative_percent=None, group_id=None):
         self._current_statuses = statuses
         self._current_colors = colors
         self._current_blur = blur
@@ -336,6 +354,7 @@ class GridView(QWidget):
             exposure_clip_threshold=clip,
             exposure_black_mean_threshold=black_mean,
             exposure_black_shadow_threshold=black_shadow,
+            group_id=group_id,
         )
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
 
@@ -486,6 +505,19 @@ class GridView(QWidget):
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
+            group_id=self._current_group_id,
+        )
+
+    def _on_group_selected(self, group_id) -> None:
+        self._current_group_id = group_id
+        mode, threshold, percent = self._blur_settings()
+        self._refresh(
+            self._current_statuses, self._current_colors,
+            self._current_blur, self._current_exposure,
+            blur_mode=mode,
+            blur_fixed_threshold=threshold,
+            blur_relative_percent=percent,
+            group_id=group_id,
         )
 
     def _on_selection_changed(self, ids: list):
@@ -677,6 +709,66 @@ class GridView(QWidget):
 
     def stop_exposure_analysis(self, timeout_ms: int = 3000):
         ctrl = self._exposure_ctrl
+        if ctrl is None:
+            return
+        ctrl.cancel()
+        ctrl.wait(timeout_ms)
+
+    def _on_phash_clicked(self) -> None:
+        if self._db_path:
+            self._start_phash_analysis(self._db_path)
+
+    def _start_phash_analysis(self, db_path: str) -> None:
+        import sqlite3 as _sq
+        from app.core.phash_worker import PHashController
+        from app.db.photo_repository import PhotoRepository as _PR
+        if self._phash_ctrl is not None:
+            return
+        conn = _sq.connect(db_path)
+        conn.row_factory = _sq.Row
+        repo = _PR(conn)
+        photo_ids = [p.id for p in repo.get_all()]
+        conn.close()
+        if not photo_ids:
+            return
+        self._phash_btn.setEnabled(False)
+        self._phash_ctrl = PHashController(self._folder, db_path, photo_ids)
+        self._phash_ctrl.progress.connect(self._on_phash_progress)
+        self._phash_ctrl.grouping_finished.connect(self._on_grouping_finished)
+        self._phash_ctrl.finished.connect(self._on_phash_finished)
+        self._phash_ctrl.start()
+
+    def _on_phash_progress(self, current: int, total: int) -> None:
+        self._phash_btn.setText(f"◈  {current}/{total}")
+
+    def _on_grouping_finished(self, group_count: int) -> None:
+        import sqlite3 as _sq
+        from app.db.group_repository import GroupRepository
+        conn = _sq.connect(self._db_path)
+        conn.row_factory = _sq.Row
+        repo = GroupRepository(conn)
+        groups = repo.get_groups_by_type("similar")
+        conn.close()
+        self._filter_panel.update_groups(groups)
+        try:
+            from app.ui.toast import Toast
+            Toast(
+                self,
+                f"找到 {group_count} 組相似照片",
+                confirm_label=None,
+                dismiss_label="知道了",
+                auto_dismiss_ms=4000,
+            ).show_at_corner()
+        except Exception:
+            pass
+
+    def _on_phash_finished(self) -> None:
+        self._phash_ctrl = None
+        self._phash_btn.setEnabled(True)
+        self._phash_btn.setText("◈  找相似")
+
+    def stop_phash_analysis(self, timeout_ms: int = 5000) -> None:
+        ctrl = self._phash_ctrl
         if ctrl is None:
             return
         ctrl.cancel()

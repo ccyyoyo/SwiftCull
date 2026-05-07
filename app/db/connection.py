@@ -59,3 +59,25 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE photos ADD COLUMN exposure_overexposed REAL")
     if "exposure_underexposed" not in cols:
         conn.execute("ALTER TABLE photos ADD COLUMN exposure_underexposed REAL")
+    if "phash_hash" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN phash_hash TEXT")
+
+    tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "groups" not in tables:
+        conn.execute("""
+            CREATE TABLE groups (
+                id         INTEGER PRIMARY KEY,
+                name       TEXT,
+                type       TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+    if "photo_groups" not in tables:
+        conn.execute("""
+            CREATE TABLE photo_groups (
+                photo_id  INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+                group_id  INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+                is_best   INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (photo_id, group_id)
+            )
+        """)

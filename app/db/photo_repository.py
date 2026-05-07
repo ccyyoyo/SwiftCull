@@ -94,6 +94,26 @@ class PhotoRepository:
         ).fetchall()
         return [int(r["id"]) for r in rows]
 
+    def update_phash_hash(self, photo_id: int, hash_str: str) -> None:
+        self._conn.execute(
+            "UPDATE photos SET phash_hash=? WHERE id=?", (hash_str, photo_id)
+        )
+        self._conn.commit()
+
+    def get_phash_unanalyzed_ids(self) -> list[int]:
+        """Return IDs where phash_hash IS NULL."""
+        rows = self._conn.execute(
+            "SELECT id FROM photos WHERE phash_hash IS NULL"
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+
+    def get_all_phash_hashes(self) -> dict[int, str]:
+        """Return {photo_id: hash_str} for all photos that have a pHash."""
+        rows = self._conn.execute(
+            "SELECT id, phash_hash FROM photos WHERE phash_hash IS NOT NULL"
+        ).fetchall()
+        return {int(r["id"]): r["phash_hash"] for r in rows}
+
     def clear_exposure_scores(self, photo_id: int) -> None:
         """Clear stored exposure fields so the photo will be re-analyzed."""
         self._conn.execute(
@@ -135,4 +155,5 @@ class PhotoRepository:
             exposure_mean=row["exposure_mean"] if "exposure_mean" in row.keys() else None,
             exposure_overexposed=row["exposure_overexposed"] if "exposure_overexposed" in row.keys() else None,
             exposure_underexposed=row["exposure_underexposed"] if "exposure_underexposed" in row.keys() else None,
+            phash_hash=row["phash_hash"] if "phash_hash" in row.keys() else None,
         )

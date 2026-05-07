@@ -22,6 +22,7 @@ class Photo:
     exposure_mean: Optional[float] = None
     exposure_overexposed: Optional[float] = None
     exposure_underexposed: Optional[float] = None
+    phash_hash: Optional[str] = None
 
 @dataclass
 class Tag:

@@ -176,6 +176,7 @@ class _CollapsedTab(QWidget):
 
 class FilterPanel(QWidget):
     filter_changed = Signal(list, list, list, list)  # statuses, colors, blur, exposure
+    group_selected = Signal(object)                  # Optional[int] – None = show all
 
     def __init__(self, settings=None, parent=None):
         super().__init__(parent)
@@ -185,6 +186,8 @@ class FilterPanel(QWidget):
         self._color_checks: dict[str, _ColorDotCheckBox] = {}
         self._blur_checks: dict = {}
         self._exposure_checks: dict = {}
+        self._group_buttons: list[QPushButton] = []
+        self._selected_group_id: object = None  # Optional[int]
 
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setStyleSheet(f"background:{BG_PANEL};")
@@ -339,6 +342,40 @@ class FilterPanel(QWidget):
             self._exposure_checks[exp_key] = cb
             cl.addWidget(cb)
 
+        cl.addSpacing(8)
+
+        # SIMILAR section
+        self._similar_sec_label = QLabel("SIMILAR")
+        self._similar_sec_label.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(self._similar_sec_label)
+
+        self._similar_placeholder = QLabel("尚未分析")
+        self._similar_placeholder.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; padding:2px 0;"
+        )
+        cl.addWidget(self._similar_placeholder)
+
+        self._similar_all_btn = QPushButton("全部顯示")
+        self._similar_all_btn.setObjectName("filter_similar_all_button")
+        self._similar_all_btn.setCheckable(True)
+        self._similar_all_btn.setChecked(True)
+        self._similar_all_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:2px 6px; font-size:10px; }}"
+            f"QPushButton:checked {{ background:{ACCENT}; color:#fff; border-color:{ACCENT}; }}"
+        )
+        self._similar_all_btn.hide()
+        self._similar_all_btn.clicked.connect(lambda: self._select_group(None))
+        cl.addWidget(self._similar_all_btn)
+
+        self._similar_groups_container = QWidget()
+        self._similar_groups_layout = QVBoxLayout(self._similar_groups_container)
+        self._similar_groups_layout.setContentsMargins(0, 0, 0, 0)
+        self._similar_groups_layout.setSpacing(2)
+        cl.addWidget(self._similar_groups_container)
+
         cl.addStretch()
 
         scroll.setWidget(self._content)
@@ -377,6 +414,53 @@ class FilterPanel(QWidget):
         dlg = BlurSettingsDialog(self._settings, self)
         dlg.settings_changed.connect(lambda *_: self._emit_filter())
         dlg.exec()
+
+    def update_groups(self, groups: list) -> None:
+        """Refresh the similar-groups list. `groups` is a list of Group objects."""
+        for btn in self._group_buttons:
+            self._similar_groups_layout.removeWidget(btn)
+            btn.deleteLater()
+        self._group_buttons.clear()
+
+        if not groups:
+            self._similar_placeholder.show()
+            self._similar_all_btn.hide()
+            self._selected_group_id = None
+            return
+
+        self._similar_placeholder.hide()
+        self._similar_all_btn.show()
+
+        for g in groups:
+            label = g.name or f"分組 {g.id}"
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setProperty("group_id", g.id)
+            btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+                f" border:1px solid #333; border-radius:3px; padding:2px 6px;"
+                f" font-size:10px; text-align:left; }}"
+                f"QPushButton:checked {{ background:#2a3a2a; color:#8fd; border-color:#4a8; }}"
+                f"QPushButton:hover:!checked {{ background:#2a2a2a; color:#ddd; border-color:#555; }}"
+            )
+            btn.clicked.connect(self._on_group_btn_clicked)
+            self._similar_groups_layout.addWidget(btn)
+            self._group_buttons.append(btn)
+
+        self._select_group(None)
+
+    def _on_group_btn_clicked(self) -> None:
+        btn = self.sender()
+        if btn is None:
+            return
+        self._select_group(btn.property("group_id"))
+
+    def _select_group(self, group_id) -> None:
+        self._selected_group_id = group_id
+        self._similar_all_btn.setChecked(group_id is None)
+        for btn in self._group_buttons:
+            btn.setChecked(btn.property("group_id") == group_id)
+        self.group_selected.emit(group_id)
 
     def set_filter(self, statuses, colors):
         """Programmatically reflect external filter changes (e.g. from Loupe)
