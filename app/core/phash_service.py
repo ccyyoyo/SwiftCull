@@ -1,5 +1,6 @@
 import logging
 import os
+from collections import defaultdict
 from typing import Dict, List, Optional
 
 log = logging.getLogger(__name__)
@@ -12,9 +13,8 @@ except ImportError:
     _CV2_AVAILABLE = False
     log.warning("OpenCV not available - pHash disabled")
 
-_HASH_SIZE = 8          # 8x8 DCT block → 64-bit hash
-_DCT_SIZE = 32          # resize target before DCT
-_HEX_CHARS = _HASH_SIZE * _HASH_SIZE // 4   # 16 hex chars per 64 bits
+_HASH_SIZE = 8   # 8x8 DCT block → 64-bit hash
+_DCT_SIZE = 32   # resize target before DCT
 
 
 class PHashService:
@@ -79,7 +79,6 @@ class PHashService:
                 if PHashService.hamming_distance(hash_values[i], hash_values[j]) <= threshold:
                     union(i, j)
 
-        from collections import defaultdict
         clusters: Dict[int, List[int]] = defaultdict(list)
         for i in range(n):
             clusters[find(i)].append(ids[i])

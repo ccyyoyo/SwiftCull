@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import FrozenSet, List, Optional
 from app.db.photo_repository import PhotoRepository
 from app.db.tag_repository import TagRepository
 from app.core.models import Photo
@@ -24,21 +24,19 @@ class FilterService:
         exposure_clip_threshold: float = 0.01,
         exposure_black_mean_threshold: float = 8.0,
         exposure_black_shadow_threshold: float = 0.90,
-        group_id: Optional[int] = None,
+        group_member_ids: Optional[FrozenSet[int]] = None,
     ) -> List[Photo]:
         log.debug(
-            "filter called: statuses=%s colors=%s blur=%s exposure=%s group_id=%s",
-            statuses, colors, blur, exposure, group_id,
+            "filter called: statuses=%s colors=%s blur=%s exposure=%s group=%s",
+            statuses, colors, blur, exposure,
+            f"{len(group_member_ids)} ids" if group_member_ids is not None else None,
         )
         all_photos = self._photos.get_all()
 
-        if group_id is not None:
-            from app.db.group_repository import GroupRepository
-            group_repo = GroupRepository(self._photos._conn)
-            member_ids = set(group_repo.get_photo_ids_in_group(group_id))
-            all_photos = [p for p in all_photos if p.id in member_ids]
+        if group_member_ids is not None:
+            all_photos = [p for p in all_photos if p.id in group_member_ids]
 
-        if not statuses and not colors and not blur and not exposure and group_id is None:
+        if not statuses and not colors and not blur and not exposure and group_member_ids is None:
             return all_photos
 
         effective_threshold = blur_fixed_threshold

@@ -17,7 +17,7 @@ from app.db.photo_repository import PhotoRepository
 
 log = logging.getLogger(__name__)
 
-_GROUP_TYPE = "similar"
+GROUP_TYPE = "similar"
 
 
 class PHashWorker(QObject):
@@ -85,17 +85,18 @@ class PHashWorker(QObject):
                 self.progress.emit(i + 1, total)
 
             if self._cancel:
+                log.info("PHashWorker cancelled before grouping")
                 return
 
-            # Phase B: group by similarity
+            # Phase B: group by similarity across all hashes in DB
             all_hashes = repo.get_all_phash_hashes()
             groups = PHashService.group_by_similarity(all_hashes, self._threshold)
 
             group_repo = GroupRepository(conn)
-            group_repo.clear_groups_by_type(_GROUP_TYPE)
+            group_repo.clear_groups_by_type(GROUP_TYPE)
 
             for idx, members in enumerate(groups, 1):
-                gid = group_repo.create_group(f"相似組 {idx}", _GROUP_TYPE)
+                gid = group_repo.create_group(f"相似組 {idx}", GROUP_TYPE)
                 for photo_id in members:
                     group_repo.add_photo_to_group(photo_id, gid, is_best=False)
 

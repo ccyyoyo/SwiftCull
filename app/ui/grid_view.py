@@ -78,7 +78,8 @@ class GridView(QWidget):
         self._settings = settings  # SettingsDB instance
         self._current_blur = None
         self._current_exposure = None
-        self._current_group_id = None
+        self._current_group_id = None          # Optional[int] – for panel sync
+        self._current_group_member_ids = None  # Optional[frozenset[int]] – for filtering
         self._blur_ctrl = None
         self._exposure_ctrl = None
         self._phash_ctrl = None
@@ -338,7 +339,7 @@ class GridView(QWidget):
 
     def _refresh(self, statuses=None, colors=None, blur=None, exposure=None,
                  blur_mode=None, blur_fixed_threshold=None,
-                 blur_relative_percent=None, group_id=None):
+                 blur_relative_percent=None):
         self._current_statuses = statuses
         self._current_colors = colors
         self._current_blur = blur
@@ -354,7 +355,7 @@ class GridView(QWidget):
             exposure_clip_threshold=clip,
             exposure_black_mean_threshold=black_mean,
             exposure_black_shadow_threshold=black_shadow,
-            group_id=group_id,
+            group_member_ids=self._current_group_member_ids,
         )
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
 
@@ -505,11 +506,20 @@ class GridView(QWidget):
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
-            group_id=self._current_group_id,
         )
 
     def _on_group_selected(self, group_id) -> None:
         self._current_group_id = group_id
+        if group_id is None:
+            self._current_group_member_ids = None
+        else:
+            import sqlite3 as _sq
+            from app.db.group_repository import GroupRepository
+            conn = _sq.connect(self._db_path)
+            conn.row_factory = _sq.Row
+            member_ids = GroupRepository(conn).get_photo_ids_in_group(group_id)
+            conn.close()
+            self._current_group_member_ids = frozenset(member_ids)
         mode, threshold, percent = self._blur_settings()
         self._refresh(
             self._current_statuses, self._current_colors,
@@ -517,7 +527,6 @@ class GridView(QWidget):
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
-            group_id=group_id,
         )
 
     def _on_selection_changed(self, ids: list):
@@ -579,6 +588,7 @@ class GridView(QWidget):
             exposure_clip_threshold=clip,
             exposure_black_mean_threshold=black_mean,
             exposure_black_shadow_threshold=black_shadow,
+            group_member_ids=self._current_group_member_ids,
         )
         photo_ids = [p.id for p in photos]
         if photo_id not in photo_ids:
@@ -720,35 +730,44 @@ class GridView(QWidget):
 
     def _start_phash_analysis(self, db_path: str) -> None:
         import sqlite3 as _sq
-        from app.core.phash_worker import PHashController
+        from app.core.phash_worker import GROUP_TYPE, PHashController
         from app.db.photo_repository import PhotoRepository as _PR
         if self._phash_ctrl is not None:
             return
         conn = _sq.connect(db_path)
         conn.row_factory = _sq.Row
         repo = _PR(conn)
-        photo_ids = [p.id for p in repo.get_all()]
+        # Incremental: Phase A only hashes unanalyzed photos.
+        # Phase B always re-groups using all hashes in DB.
+        unanalyzed_ids = repo.get_phash_unanalyzed_ids()
+        total_count = repo.count()
         conn.close()
-        if not photo_ids:
+        if total_count == 0:
             return
         self._phash_btn.setEnabled(False)
-        self._phash_ctrl = PHashController(self._folder, db_path, photo_ids)
+        self._phash_ctrl = PHashController(self._folder, db_path, unanalyzed_ids)
         self._phash_ctrl.progress.connect(self._on_phash_progress)
-        self._phash_ctrl.grouping_finished.connect(self._on_grouping_finished)
+        self._phash_ctrl.grouping_finished.connect(
+            lambda n, gt=GROUP_TYPE: self._on_grouping_finished(n, gt)
+        )
         self._phash_ctrl.finished.connect(self._on_phash_finished)
         self._phash_ctrl.start()
 
     def _on_phash_progress(self, current: int, total: int) -> None:
-        self._phash_btn.setText(f"◈  {current}/{total}")
+        if total > 0:
+            self._phash_btn.setText(f"◈  {current}/{total}")
 
-    def _on_grouping_finished(self, group_count: int) -> None:
+    def _on_grouping_finished(self, group_count: int, group_type: str) -> None:
         import sqlite3 as _sq
         from app.db.group_repository import GroupRepository
         conn = _sq.connect(self._db_path)
         conn.row_factory = _sq.Row
         repo = GroupRepository(conn)
-        groups = repo.get_groups_by_type("similar")
+        groups = repo.get_groups_by_type(group_type)
         conn.close()
+        # Groups have been rebuilt; clear any stale group selection
+        self._current_group_id = None
+        self._current_group_member_ids = None
         self._filter_panel.update_groups(groups)
         try:
             from app.ui.toast import Toast

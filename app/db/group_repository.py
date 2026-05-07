@@ -76,7 +76,11 @@ class GroupRepository:
         return int(row["group_id"]) if row else None
 
     def clear_groups_by_type(self, group_type: str) -> None:
-        """Delete all groups of given type and their photo memberships (cascade)."""
+        """Delete all groups of given type and their photo memberships.
+
+        Deletes photo_groups rows explicitly before groups to work correctly
+        even when PRAGMA foreign_keys is OFF on the caller's connection.
+        """
         self._conn.execute(
             "DELETE FROM photo_groups WHERE group_id IN"
             " (SELECT id FROM groups WHERE type=?)",

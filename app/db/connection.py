@@ -81,3 +81,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
                 PRIMARY KEY (photo_id, group_id)
             )
         """)
+
+    indexes = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    if "idx_photo_groups_group_id" not in indexes:
+        conn.execute("CREATE INDEX idx_photo_groups_group_id ON photo_groups(group_id)")
+    if "idx_groups_type" not in indexes:
+        conn.execute("CREATE INDEX idx_groups_type ON groups(type)")
