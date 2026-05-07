@@ -44,7 +44,13 @@ def loaded_main_window(shown_main_window, sample_photo_folder, qtbot):
     shown_main_window._load_folder(str(sample_photo_folder))
     wait_for_import_finished(shown_main_window, qtbot)
     wait_for_blur_finished(shown_main_window, qtbot)
-    return shown_main_window
+    yield shown_main_window
+    grid = shown_main_window._grid_view
+    if grid is not None:
+        if grid._blur_ctrl is not None:
+            grid.stop_blur_analysis(timeout_ms=3000)
+        if grid._exposure_ctrl is not None:
+            grid.stop_exposure_analysis(timeout_ms=3000)
 
 
 def find_required(parent: QWidget, object_name: str, cls=None):

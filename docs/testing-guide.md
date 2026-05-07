@@ -1,7 +1,7 @@
 # SwiftCull 測試手冊
 
 > 對象：開發者、Phase release 前的 QA、回歸測試
-> 範圍：Phase 1 MVP（匯入、Grid、Loupe、標記、篩選、Toast、最近專案）
+> 範圍：Phase 1 MVP + Phase 2（模糊偵測、曝光偵測、匯出）
 
 本文件分四層：
 
@@ -34,14 +34,41 @@ pip install pytest
 ### 1.1 跑全套單元 / 整合測試
 
 ```bash
-# Windows
+# Windows（需要桌面環境）
 python -m pytest -q
+
+# Linux headless / CI（無顯示器）
+QT_QPA_PLATFORM=offscreen python -m pytest -q
 
 # 帶詳細輸出
 python -m pytest -v
+
+# 只跑 GUI smoke（最快回歸確認）
+QT_QPA_PLATFORM=offscreen python -m pytest -q -m smoke
 ```
 
-預期：**103 passed**（含 PySide6 環境）；無 PySide6 時 `tests/core/test_batch_confirm.py` 會 collect 失敗，加 `--ignore=tests/core/test_batch_confirm.py`。
+預期：**190 passed**（含 PySide6 GUI smoke tests）。
+
+### 1.1a GUI Smoke Tests
+
+`tests/smoke/` 目錄包含完整的 pytest-qt GUI workflow smoke suite，標記為 `@pytest.mark.smoke @pytest.mark.gui`：
+
+| Smoke 測試 | 驗證範圍 |
+|-----------|---------|
+| `test_main_window_starts_on_welcome_view` | 啟動 → WelcomeView |
+| `test_load_folder_imports_photos` | `_load_folder` seam → 匯入 → DB |
+| `test_filter_pick_checkbox_filters_grid` | FilterPanel 點擊 → Grid 過濾 |
+| `test_select_all_and_deselect_all_buttons` | 全選/取消選按鈕 + selection_label |
+| `test_blur_button_writes_blur_scores` | 模糊分析按鈕 → DB 寫入 |
+| `test_exposure_button_writes_exposure_scores` | 曝光分析按鈕 → DB 寫入 |
+| `test_loupe_keyboard_tagging_and_close` | LoupeView Key_P tagging + Esc 關閉 |
+| `test_export_dialog_exports_picked_photo` | ExportDialog → 檔案 copy |
+| `test_project_db_can_be_reopened_after_gui_import` | DB 重開不 crash |
+
+**Headless 注意事項：**
+- 使用 `QT_QPA_PLATFORM=offscreen` 在無顯示器環境跑
+- 部分 visual widget 在 offscreen 行為略有差異（例如 `waitExposed` 可能需要較長 timeout）
+- 若遇到 `libEGL.so.1` 找不到，需安裝 `libegl1` 套件
 
 ### 1.2 已涵蓋（自動）
 
@@ -52,22 +79,28 @@ python -m pytest -v
 | `ThumbnailService` | `tests/core/test_thumbnail_service.py` | 快取命中、`invalidate` |
 | `TagService` | `tests/core/test_tag_service.py` | set/clear status、color 保留、batch、None 寫入語意 |
 | `FilterService` | `tests/core/test_filter_service.py` | status/color 組合、untagged 邏輯 |
+| `FilterService` (blur+exposure) | `tests/core/test_filter_service_exposure.py` | blur/exposure 多選 OR 邏輯 |
+| `BlurService` | `tests/core/test_blur_service.py` | Laplacian 計算、None 容錯 |
+| `ExposureService` (classifier) | `tests/core/test_exposure_classifier.py` | overexposed/underexposed/black_frame/normal 分類 |
+| `ExposureService` | `tests/core/test_exposure_service.py` | compute_scores、None 回傳 |
 | `RecentProjects` | `tests/core/test_recent_projects.py` | dedupe、上限、prune missing、壞值容錯 |
 | `preview_loader` | `tests/core/test_preview_loader.py` | RAW 嵌入 JPEG、標準格式、錯誤路徑 |
 | `PhotoRepository` | `tests/db/test_photo_repository.py` | insert / update / mtime 欄位 / mtime map |
+| `PhotoRepository` (exposure) | `tests/db/test_photo_repository_exposure.py` | get_exposure_unanalyzed_ids、clear_exposure_scores |
 | `TagRepository` | `tests/db/test_tag_repository.py` | upsert（含 None 寫入修正） |
 | `connection.init_db` | `tests/db/test_connection.py` | schema、migration 加 `mtime`、idempotence |
 | `SettingsDB` | `tests/db/test_settings_db.py` | KV、自動從 `settings.json` 匯入、壞 JSON 容錯 |
 | `format_scan_message` | `tests/utils/test_messages.py` | 5 種 new/modified/missing 組合 |
 | 端到端 | `tests/integration/test_import_to_filter_flow.py` | scan → import → tag → filter |
+| GUI smoke | `tests/smoke/test_gui_workflow.py` | 完整 UI workflow（見 1.1a） |
 
 ### 1.3 未涵蓋（必須手動驗）
 
-- 任何 Qt widget 的繪製、事件處理、跨 thread signal
-- `LoupeView`、`ThumbnailGrid`、`ThumbnailItem`、`Toast`、`WelcomeView`、`MainWindow`、`GridView`、`FilterPanel`、`BatchConfirmDialog`
+- 任何 Qt widget 的**視覺**正確性（像素對齊、顏色、字體）
+- `Toast`、`BatchConfirmDialog`、`ThumbnailItem` 拖放、右鍵選單
 - `ImportWorker` / `ScanWorker` 的 cancel 行為（與 QThread 強耦合，目前以人工驗證）
-- 顏色/字體 theme 的視覺正確性
-- 拖放、右鍵選單、鍵盤焦點
+- 多螢幕、HiDPI 縮放行為
+- Loupe 滾輪縮放、方向鍵翻頁（視覺確認）
 
 > 規則：UI 程式碼若可純邏輯化（例如把訊息字串拉到 `app/utils/messages.py`），**就要拉**，並補單元測試。不能拉的部分走第 3 節手動 checklist。
 
@@ -301,12 +334,14 @@ python tools/benchmark_phase1.py --count 1000 --dim 1024 --workers 4
 
 每個 minor release 至少：
 
-- [ ] `pytest -q` 全綠
+- [ ] `pytest -q` 全綠（目前預期 190 passed）
+- [ ] `pytest -q -m smoke` 全綠（9 個 GUI smoke 均通過）
 - [ ] `python tools/benchmark_phase1.py --count 1000` PASS 兩個 spec 目標
 - [ ] 用真 RAW 1000+ 張資料夾跑一次第 3.2 + 3.3 + 3.10 節
 - [ ] 跑完整第 3 節手動 checklist
 - [ ] 用全新 user 環境（清空 `%LOCALAPPDATA%`、`%APPDATA%`）跑一次第 3.2 + 3.8 + 3.9 節
 - [ ] 視覺檢查：Loupe 上下 chrome、Grid tile、Toast 在不同 DPI 下顯示正確
+- [ ] 確認 blur 分析與曝光分析按鈕在完整 GUI 流程中正常觸發
 - [ ] 檢查 git log 沒有未文檔化的破壞性變更
 
 ---
