@@ -81,10 +81,12 @@ class GridView(QWidget):
         self._current_noise = None
         self._current_group_id = None          # Optional[int] – for panel sync
         self._current_group_member_ids = None  # Optional[frozenset[int]] – for filtering
+        self._current_horizon = None
         self._blur_ctrl = None
         self._exposure_ctrl = None
         self._noise_ctrl = None
         self._phash_ctrl = None
+        self._horizon_ctrl = None
         self._db_path: str = ""
         self._selected_ids: list[int] = []
         self._current_statuses = None
@@ -233,6 +235,21 @@ class GridView(QWidget):
         self._noise_btn.clicked.connect(self._on_noise_clicked)
         tb.addWidget(self._noise_btn)
 
+        self._horizon_btn = QPushButton("⟁  分析地平線")
+        self._horizon_btn.setObjectName("grid_analyze_horizon_button")
+        self._horizon_btn.setCursor(Qt.PointingHandCursor)
+        self._horizon_btn.setToolTip("偵測尚未分析地平線歪斜的照片")
+        self._horizon_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ background:#2a2a2a; color:#ddd;"
+            f" border-color:#555; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#222; }}"
+        )
+        self._horizon_btn.clicked.connect(self._on_horizon_clicked)
+        tb.addWidget(self._horizon_btn)
+
         self._split_btn = QPushButton("⊟  分割預覽")
         self._split_btn.setObjectName("grid_split_preview_button")
         self._split_btn.setCheckable(True)
@@ -355,7 +372,7 @@ class GridView(QWidget):
             self._split_btn.setText("⊟  分割預覽")
 
     def _refresh(self, statuses=None, colors=None, blur=None, exposure=None,
-                 noise=None,
+                 noise=None, horizon=None,
                  blur_mode=None, blur_fixed_threshold=None,
                  blur_relative_percent=None,
                  noise_fixed_threshold=None):
@@ -364,6 +381,7 @@ class GridView(QWidget):
         self._current_blur = blur
         self._current_exposure = exposure
         self._current_noise = noise
+        self._current_horizon = horizon
         if blur_mode is None or blur_fixed_threshold is None or blur_relative_percent is None:
             blur_mode, blur_fixed_threshold, blur_relative_percent = self._blur_settings()
         clip, black_mean, black_shadow = self._exposure_settings()
@@ -371,7 +389,7 @@ class GridView(QWidget):
             noise_fixed_threshold = self._noise_settings()
         photos = self._filter_svc.filter(
             statuses=statuses, colors=colors, blur=blur, exposure=exposure,
-            noise=noise,
+            noise=noise, horizon=horizon,
             blur_mode=blur_mode,
             blur_fixed_threshold=blur_fixed_threshold,
             blur_relative_percent=blur_relative_percent,
@@ -524,15 +542,16 @@ class GridView(QWidget):
             return
         ErrorListDialog(self._import_errors, self).exec()
 
-    def _on_filter_changed(self, statuses, colors, blur, exposure, noise):
+    def _on_filter_changed(self, statuses, colors, blur, exposure, noise, horizon):
         self._current_blur = blur or None
         self._current_exposure = exposure or None
         self._current_noise = noise or None
+        self._current_horizon = horizon or None
         mode, threshold, percent = self._blur_settings()
         noise_threshold = self._noise_settings()
         self._refresh(
             statuses or None, colors or None, blur or None, exposure or None,
-            noise=noise or None,
+            noise=noise or None, horizon=horizon or None,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -615,6 +634,7 @@ class GridView(QWidget):
             blur=self._current_blur,
             exposure=self._current_exposure,
             noise=self._current_noise,
+            horizon=self._current_horizon,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -637,6 +657,7 @@ class GridView(QWidget):
             initial_blur=self._current_blur,
             initial_exposure=self._current_exposure,
             initial_noise=self._current_noise,
+            initial_horizon=self._current_horizon,
             settings=self._settings,
         )
         loupe.tag_changed.connect(self._grid.update_item_tag)
@@ -651,7 +672,7 @@ class GridView(QWidget):
         noise_threshold = self._noise_settings()
         self._refresh(
             statuses or None, colors or None, self._current_blur, self._current_exposure,
-            noise=self._current_noise,
+            noise=self._current_noise, horizon=self._current_horizon,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -863,6 +884,43 @@ class GridView(QWidget):
 
     def stop_phash_analysis(self, timeout_ms: int = 5000) -> None:
         ctrl = self._phash_ctrl
+        if ctrl is None:
+            return
+        ctrl.cancel()
+        ctrl.wait(timeout_ms)
+
+    def _on_horizon_clicked(self):
+        if self._db_path:
+            self._start_horizon_analysis(self._db_path)
+
+    def _start_horizon_analysis(self, db_path: str):
+        import sqlite3 as _sq
+        from app.core.horizon_worker import HorizonController
+        from app.db.photo_repository import PhotoRepository as _PR
+        if self._horizon_ctrl is not None:
+            return
+        conn = _sq.connect(db_path)
+        conn.row_factory = _sq.Row
+        repo = _PR(conn)
+        photo_ids = repo.get_horizon_unanalyzed_ids()
+        conn.close()
+        if not photo_ids:
+            return
+        self._horizon_btn.setEnabled(False)
+        self._horizon_ctrl = HorizonController(self._folder, db_path, photo_ids)
+        self._horizon_ctrl.photo_horizon_updated.connect(self._on_photo_horizon_updated)
+        self._horizon_ctrl.finished.connect(self._on_horizon_finished)
+        self._horizon_ctrl.start()
+
+    def _on_photo_horizon_updated(self, photo_id: int, skew: float):
+        self._grid.update_item_tag(photo_id)
+
+    def _on_horizon_finished(self):
+        self._horizon_ctrl = None
+        self._horizon_btn.setEnabled(True)
+
+    def stop_horizon_analysis(self, timeout_ms: int = 3000):
+        ctrl = self._horizon_ctrl
         if ctrl is None:
             return
         ctrl.cancel()

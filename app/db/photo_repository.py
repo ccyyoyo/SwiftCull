@@ -127,6 +127,20 @@ class PhotoRepository:
         ).fetchall()
         return {int(r["id"]): r["phash_hash"] for r in rows}
 
+    def update_horizon_skew(self, photo_id: int, skew_angle: float) -> None:
+        self._conn.execute(
+            "UPDATE photos SET horizon_skew=? WHERE id=?", (skew_angle, photo_id)
+        )
+        self._conn.commit()
+
+    def get_horizon_unanalyzed_ids(self) -> list[int]:
+        """Return IDs of photos where horizon_skew IS NULL."""
+        rows = self._conn.execute(
+            "SELECT id FROM photos WHERE horizon_skew IS NULL"
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+
+
     def clear_exposure_scores(self, photo_id: int) -> None:
         """Clear stored exposure fields so the photo will be re-analyzed."""
         self._conn.execute(
@@ -170,4 +184,5 @@ class PhotoRepository:
             exposure_underexposed=row["exposure_underexposed"] if "exposure_underexposed" in row.keys() else None,
             phash_hash=row["phash_hash"] if "phash_hash" in row.keys() else None,
             noise_score=row["noise_score"] if "noise_score" in row.keys() else None,
+            horizon_skew=row["horizon_skew"] if "horizon_skew" in row.keys() else None,
         )
