@@ -12,6 +12,7 @@ from app.utils.theme import (
     BLUR_BLURRY, BLUR_SHARP, BLUR_UNKNOWN,
     EXPOSURE_OVEREXPOSED, EXPOSURE_UNDEREXPOSED, EXPOSURE_BLACK,
     EXPOSURE_NORMAL, EXPOSURE_UNKNOWN,
+    NOISE_NOISY, NOISE_CLEAN, NOISE_UNKNOWN,
 )
 
 STATUSES = ["pick", "reject", "maybe", "untagged"]
@@ -175,8 +176,8 @@ class _CollapsedTab(QWidget):
 
 
 class FilterPanel(QWidget):
-    filter_changed = Signal(list, list, list, list)  # statuses, colors, blur, exposure
-    group_selected = Signal(object)                  # Optional[int] – None = show all
+    filter_changed = Signal(list, list, list, list, list)  # statuses, colors, blur, exposure, noise
+    group_selected = Signal(object)                        # Optional[int] – None = show all
 
     def __init__(self, settings=None, parent=None):
         super().__init__(parent)
@@ -186,6 +187,7 @@ class FilterPanel(QWidget):
         self._color_checks: dict[str, _ColorDotCheckBox] = {}
         self._blur_checks: dict = {}
         self._exposure_checks: dict = {}
+        self._noise_checks: dict = {}
         self._group_buttons: list[QPushButton] = []
         self._selected_group_id: object = None  # Optional[int]
 
@@ -344,6 +346,44 @@ class FilterPanel(QWidget):
 
         cl.addSpacing(8)
 
+        # NOISE section
+        sec5 = QLabel("NOISE")
+        sec5.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(sec5)
+
+        noise_header_w = QWidget()
+        noise_header_l = QHBoxLayout(noise_header_w)
+        noise_header_l.setContentsMargins(0, 0, 0, 0)
+        noise_header_l.setSpacing(4)
+        noise_header_l.addStretch()
+        noise_gear_btn = QPushButton("⚙")
+        noise_gear_btn.setFixedSize(18, 18)
+        noise_gear_btn.setStyleSheet(
+            f"background:transparent; color:{TEXT_MUTED}; border:none; font-size:11px; padding:0;"
+        )
+        noise_gear_btn.setCursor(Qt.PointingHandCursor)
+        noise_gear_btn.setToolTip("雜訊偵測設定")
+        noise_gear_btn.clicked.connect(self._open_noise_settings)
+        noise_header_l.addWidget(noise_gear_btn)
+        cl.addWidget(noise_header_w)
+
+        noise_items = [
+            ("noisy",      "雜訊",  NOISE_NOISY),
+            ("clean",      "清晰",  NOISE_CLEAN),
+            ("unanalyzed", "未分析", NOISE_UNKNOWN),
+        ]
+        for noise_key, label, color in noise_items:
+            cb = QCheckBox(label)
+            cb.setObjectName(f"filter_noise_{noise_key}")
+            cb.setStyleSheet(f"color:{color}; font-size:10px;")
+            cb.stateChanged.connect(self._emit_filter)
+            self._noise_checks[noise_key] = cb
+            cl.addWidget(cb)
+
+        cl.addSpacing(8)
+
         # SIMILAR section
         self._similar_sec_label = QLabel("SIMILAR")
         self._similar_sec_label.setStyleSheet(
@@ -398,13 +438,15 @@ class FilterPanel(QWidget):
         colors = [c for c, cb in self._color_checks.items() if cb.isChecked()]
         blur = [k for k, cb in self._blur_checks.items() if cb.isChecked()]
         exposure = [k for k, cb in self._exposure_checks.items() if cb.isChecked()]
-        self.filter_changed.emit(statuses, colors, blur, exposure)
+        noise = [k for k, cb in self._noise_checks.items() if cb.isChecked()]
+        self.filter_changed.emit(statuses, colors, blur, exposure, noise)
 
     def _clear_all(self):
         for cb in (list(self._status_checks.values())
                    + list(self._color_checks.values())
                    + list(self._blur_checks.values())
-                   + list(self._exposure_checks.values())):
+                   + list(self._exposure_checks.values())
+                   + list(self._noise_checks.values())):
             cb.setChecked(False)
 
     def _open_blur_settings(self):
@@ -412,8 +454,16 @@ class FilterPanel(QWidget):
         if self._settings is None:
             return
         dlg = BlurSettingsDialog(self._settings, self)
-        dlg.settings_changed.connect(lambda *_: self._emit_filter())
         dlg.exec()
+        self._emit_filter()
+
+    def _open_noise_settings(self):
+        from app.ui.noise_settings_dialog import NoiseSettingsDialog
+        if self._settings is None:
+            return
+        dlg = NoiseSettingsDialog(self._settings, self)
+        dlg.exec()
+        self._emit_filter()
 
     def update_groups(self, groups: list) -> None:
         """Refresh the similar-groups list. `groups` is a list of Group objects."""
