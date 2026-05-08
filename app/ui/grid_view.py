@@ -387,9 +387,11 @@ class GridView(QWidget):
         clip, black_mean, black_shadow = self._exposure_settings()
         if noise_fixed_threshold is None:
             noise_fixed_threshold = self._noise_settings()
+        skew_threshold = self._horizon_settings()
         photos = self._filter_svc.filter(
             statuses=statuses, colors=colors, blur=blur, exposure=exposure,
             noise=noise, horizon=horizon,
+            horizon_skew_threshold=skew_threshold,
             blur_mode=blur_mode,
             blur_fixed_threshold=blur_fixed_threshold,
             blur_relative_percent=blur_relative_percent,
@@ -415,6 +417,9 @@ class GridView(QWidget):
 
     def _noise_settings(self) -> float:
         return float(self._settings.get("noise_fixed_threshold", 0.5))
+
+    def _horizon_settings(self) -> float:
+        return float(self._settings.get("horizon_skew_threshold", 1.0))
 
     def begin_import(self, total: int):
         self._import_total = total
@@ -628,6 +633,7 @@ class GridView(QWidget):
         mode, threshold, percent = self._blur_settings()
         clip, black_mean, black_shadow = self._exposure_settings()
         noise_threshold = self._noise_settings()
+        skew_threshold = self._horizon_settings()
         photos = self._filter_svc.filter(
             statuses=self._current_statuses,
             colors=self._current_colors,
@@ -635,6 +641,7 @@ class GridView(QWidget):
             exposure=self._current_exposure,
             noise=self._current_noise,
             horizon=self._current_horizon,
+            horizon_skew_threshold=skew_threshold,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,

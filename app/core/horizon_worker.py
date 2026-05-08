@@ -60,7 +60,9 @@ class HorizonWorker(QObject):
                         repo.update_horizon_skew(photo_id, skew)
                         self.photo_horizon_updated.emit(photo_id, skew)
                     else:
-                        log.debug("HorizonService returned None for photo %d, skipping DB write", photo_id)
+                        # No detectable horizon — mark analyzed so we don't retry forever
+                        repo.mark_horizon_no_result(photo_id)
+                        log.debug("No horizon found for photo %d; marked analyzed", photo_id)
                 except Exception as e:
                     log.debug("Error computing horizon skew for photo %d: %s", photo_id, e)
                 self.progress.emit(i + 1, total)

@@ -20,6 +20,7 @@ class FilterService:
         exposure: Optional[List[str]] = None,
         noise: Optional[List[str]] = None,
         horizon: Optional[List[str]] = None,
+        horizon_skew_threshold: float = 1.0,
         blur_mode: str = "fixed",
         blur_fixed_threshold: float = 100.0,
         blur_relative_percent: float = 20.0,
@@ -27,7 +28,6 @@ class FilterService:
         exposure_black_mean_threshold: float = 8.0,
         exposure_black_shadow_threshold: float = 0.90,
         noise_fixed_threshold: float = 0.5,
-        horizon_skew_threshold: float = 1.0,
         group_member_ids: Optional[FrozenSet[int]] = None,
     ) -> List[Photo]:
         log.debug(

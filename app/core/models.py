@@ -25,6 +25,7 @@ class Photo:
     phash_hash: Optional[str] = None
     noise_score: Optional[float] = None
     horizon_skew: Optional[float] = None
+    horizon_analyzed: bool = False
 
 @dataclass
 class Tag:

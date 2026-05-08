@@ -35,7 +35,7 @@ class HorizonService:
             if w > _MAX_SIDE:
                 scale = _MAX_SIDE / w
                 img = cv2.resize(img, (int(w * scale), int(h * scale)))
-                h, w = img.shape[:2]
+                w = img.shape[1]
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             gray = cv2.GaussianBlur(gray, (5, 5), 0)
             edges = cv2.Canny(gray, 50, 150)

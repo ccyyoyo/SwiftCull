@@ -65,6 +65,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE photos ADD COLUMN noise_score REAL")
     if "horizon_skew" not in cols:
         conn.execute("ALTER TABLE photos ADD COLUMN horizon_skew REAL")
+    if "horizon_analyzed" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN horizon_analyzed INTEGER DEFAULT 0")
 
     tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     if "groups" not in tables:

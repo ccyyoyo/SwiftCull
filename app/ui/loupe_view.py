@@ -379,6 +379,7 @@ class LoupeView(QWidget):
             exposure=self._exposure or None,
             noise=self._noise or None,
             horizon=self._horizon or None,
+            horizon_skew_threshold=self._horizon_settings(),
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -495,6 +496,11 @@ class LoupeView(QWidget):
             return 0.5
         return float(self._settings.get("noise_fixed_threshold", 0.5))
 
+    def _horizon_settings(self) -> float:
+        if self._settings is None:
+            return 1.0
+        return float(self._settings.get("horizon_skew_threshold", 1.0))
+
     def _update_exposure_label(self):
         from app.utils.theme import (
             EXPOSURE_OVEREXPOSED, EXPOSURE_UNDEREXPOSED, EXPOSURE_BLACK,
@@ -555,7 +561,7 @@ class LoupeView(QWidget):
         if skew is None:
             text, color = "Horizon: —", HORIZON_UNKNOWN
         else:
-            state = HorizonService.skew_state(photo)
+            state = HorizonService.skew_state(photo, level_threshold=self._horizon_settings())
             color = HORIZON_LEVEL if state == "level" else HORIZON_TILTED
             sign = "+" if skew > 0 else ""
             text = f"Horizon: {sign}{skew:.1f}°"
