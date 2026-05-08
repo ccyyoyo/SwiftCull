@@ -71,6 +71,19 @@ class PhotoRepository:
         )
         self._conn.commit()
 
+    def update_noise_score(self, photo_id: int, score: float) -> None:
+        self._conn.execute(
+            "UPDATE photos SET noise_score=? WHERE id=?", (score, photo_id)
+        )
+        self._conn.commit()
+
+    def get_noise_unanalyzed_ids(self) -> list[int]:
+        """Return IDs of photos where noise_score IS NULL."""
+        rows = self._conn.execute(
+            "SELECT id FROM photos WHERE noise_score IS NULL"
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+
     def get_path_mtime_map(self) -> dict[str, Optional[float]]:
         """Cheap fetch for scan comparisons: relative_path -> mtime."""
         rows = self._conn.execute(
@@ -156,4 +169,5 @@ class PhotoRepository:
             exposure_overexposed=row["exposure_overexposed"] if "exposure_overexposed" in row.keys() else None,
             exposure_underexposed=row["exposure_underexposed"] if "exposure_underexposed" in row.keys() else None,
             phash_hash=row["phash_hash"] if "phash_hash" in row.keys() else None,
+            noise_score=row["noise_score"] if "noise_score" in row.keys() else None,
         )

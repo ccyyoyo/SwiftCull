@@ -111,6 +111,7 @@ class LoupeView(QWidget):
                  initial_colors: Optional[list[str]] = None,
                  initial_blur: Optional[list[str]] = None,
                  initial_exposure: Optional[list[str]] = None,
+                 initial_noise: Optional[list[str]] = None,
                  settings=None,
                  parent=None):
         super().__init__(parent)
@@ -129,6 +130,7 @@ class LoupeView(QWidget):
         self._colors = list(initial_colors) if initial_colors else []
         self._blur = list(initial_blur) if initial_blur else []
         self._exposure = list(initial_exposure) if initial_exposure else []
+        self._noise = list(initial_noise) if initial_noise else []
         self._zoom = 1.0
         self._base_pixmap: QPixmap | None = None
 
@@ -353,17 +355,20 @@ class LoupeView(QWidget):
         prev_id = self._ids[self._idx] if self._ids else None
         mode, threshold, percent = self._blur_settings()
         clip, black_mean, black_shadow = self._exposure_settings()
+        noise_threshold = self._noise_settings()
         new_photos = self._filter_svc.filter(
             statuses=self._statuses or None,
             colors=self._colors or None,
             blur=self._blur or None,
             exposure=self._exposure or None,
+            noise=self._noise or None,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
             exposure_clip_threshold=clip,
             exposure_black_mean_threshold=black_mean,
             exposure_black_shadow_threshold=black_shadow,
+            noise_fixed_threshold=noise_threshold,
         )
         new_ids = [p.id for p in new_photos]
 
@@ -467,6 +472,11 @@ class LoupeView(QWidget):
         black_mean = float(self._settings.get("exposure_black_mean_threshold", 8.0))
         black_shadow = float(self._settings.get("exposure_black_shadow_threshold", 0.90))
         return clip, black_mean, black_shadow
+
+    def _noise_settings(self) -> float:
+        if self._settings is None:
+            return 0.5
+        return float(self._settings.get("noise_fixed_threshold", 0.5))
 
     def _update_exposure_label(self):
         from app.utils.theme import (

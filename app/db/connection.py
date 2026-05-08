@@ -61,6 +61,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE photos ADD COLUMN exposure_underexposed REAL")
     if "phash_hash" not in cols:
         conn.execute("ALTER TABLE photos ADD COLUMN phash_hash TEXT")
+    if "noise_score" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN noise_score REAL")
 
     tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     if "groups" not in tables:

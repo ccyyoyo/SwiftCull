@@ -29,6 +29,10 @@ EXPOSURE_BLACK        = "#FF4D4D"  # red
 EXPOSURE_NORMAL       = "#3ddc84"  # muted green
 EXPOSURE_UNKNOWN      = "#555555"  # muted gray
 
+NOISE_NOISY   = "#FF6B6B"   # red-ish — indicates noise warning
+NOISE_CLEAN   = "#3ddc84"   # green — clean image
+NOISE_UNKNOWN = "#555555"   # muted — unanalyzed
+
 STATUS_ICON = {"pick": "✓", "reject": "✗", "maybe": "?"}
 STATUS_COLOR = {"pick": PICK_CLR, "reject": REJECT_CLR, "maybe": MAYBE_CLR}
 
