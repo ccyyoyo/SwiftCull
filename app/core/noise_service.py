@@ -32,6 +32,7 @@ class NoiseService:
                 log.debug("Failed to read image: %s", relative_path)
                 return None
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            gray -= gray.mean()  # remove DC so SNR reflects signal structure, not mean brightness
 
             fft_shift = np.fft.fftshift(np.fft.fft2(gray))
             power = np.abs(fft_shift) ** 2
