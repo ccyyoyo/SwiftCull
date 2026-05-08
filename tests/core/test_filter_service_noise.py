@@ -78,3 +78,32 @@ def test_no_noise_filter_returns_all(db_conn):
 
     results = svc.filter()
     assert len(results) == 3
+
+
+def test_filter_noise_and_blur_combined(db_conn):
+    """Both blur and noise filters applied simultaneously use AND semantics."""
+    from app.core.models import Photo
+    repo = PhotoRepository(db_conn)
+    tag_repo = TagRepository(db_conn)
+    svc = FilterService(repo, tag_repo)
+
+    def _insert(path, blur_score, noise_score):
+        pid = repo.insert(Photo(id=None, relative_path=path, filename=path, file_size=1))
+        if blur_score is not None:
+            repo.update_blur_score(pid, blur_score)
+        if noise_score is not None:
+            repo.update_noise_score(pid, noise_score)
+        return pid
+
+    pid_blurry_noisy = _insert("blurry_noisy.jpg", 30.0, 0.1)   # blur<100, noise<0.5 → match
+    pid_blurry_clean = _insert("blurry_clean.jpg", 30.0, 1.5)   # blur<100, noise≥0.5 → no match
+    pid_sharp_noisy = _insert("sharp_noisy.jpg", 200.0, 0.1)    # blur≥100, noise<0.5 → no match
+
+    results = svc.filter(
+        blur=["blurry"], blur_fixed_threshold=100.0,
+        noise=["noisy"], noise_fixed_threshold=0.5,
+    )
+    ids = [p.id for p in results]
+    assert pid_blurry_noisy in ids
+    assert pid_blurry_clean not in ids
+    assert pid_sharp_noisy not in ids

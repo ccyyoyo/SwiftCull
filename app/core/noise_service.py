@@ -2,7 +2,7 @@
 
 import os
 import logging
-from typing import List, Optional
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -59,11 +59,3 @@ class NoiseService:
             return False
         return score < threshold
 
-    def relative_threshold(self, scores: List[Optional[float]], bottom_percent: float) -> float:
-        """Return threshold so photos in the bottom percentile are considered noisy."""
-        valid = [s for s in scores if s is not None]
-        if not valid:
-            return 0.0
-        sorted_scores = sorted(valid)
-        idx = max(0, int(len(sorted_scores) * bottom_percent / 100.0) - 1)
-        return sorted_scores[idx] + 1e-9

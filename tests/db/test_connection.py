@@ -88,3 +88,56 @@ def test_init_db_idempotent(tmp_path):
     cols = _photo_columns(conn)
     conn.close()
     assert "mtime" in cols
+
+
+def test_migration_adds_noise_score_column(tmp_path):
+    """A DB created without noise_score gains the column after init_db."""
+    db_path = str(tmp_path / "pre_noise.db")
+    import sqlite3 as _sq
+    conn = _sq.connect(db_path)
+    conn.row_factory = _sq.Row
+    conn.executescript("""
+        CREATE TABLE photos (
+            id            INTEGER PRIMARY KEY,
+            relative_path TEXT UNIQUE NOT NULL,
+            filename      TEXT NOT NULL,
+            file_size     INTEGER NOT NULL,
+            shot_at       TEXT,
+            imported_at   TEXT,
+            width         INTEGER,
+            height        INTEGER,
+            camera_model  TEXT,
+            lens_model    TEXT,
+            iso           INTEGER,
+            aperture      REAL,
+            shutter_speed TEXT,
+            focal_length  REAL,
+            mtime         REAL,
+            blur_score    REAL,
+            exposure_mean REAL,
+            exposure_overexposed REAL,
+            exposure_underexposed REAL,
+            phash_hash    TEXT
+        );
+        CREATE TABLE tags (
+            id       INTEGER PRIMARY KEY,
+            photo_id INTEGER NOT NULL REFERENCES photos(id),
+            status   TEXT,
+            color    TEXT,
+            updated_at TEXT
+        );
+    """)
+    conn.commit()
+    assert "noise_score" not in _photo_columns(conn)
+
+    init_db(conn)
+
+    assert "noise_score" in _photo_columns(conn)
+    conn.execute(
+        "INSERT INTO photos (relative_path, filename, file_size) VALUES (?,?,?)",
+        ("a.jpg", "a.jpg", 1),
+    )
+    conn.commit()
+    row = conn.execute("SELECT noise_score FROM photos").fetchone()
+    assert row["noise_score"] is None
+    conn.close()
