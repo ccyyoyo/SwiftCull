@@ -33,6 +33,10 @@ NOISE_NOISY   = "#FF6B6B"   # red-ish — indicates noise warning
 NOISE_CLEAN   = "#3ddc84"   # green — clean image
 NOISE_UNKNOWN = "#555555"   # muted — unanalyzed
 
+HORIZON_LEVEL   = "#3ddc84"  # green — level horizon
+HORIZON_TILTED  = "#FF6B6B"  # red — skewed horizon
+HORIZON_UNKNOWN = "#555555"  # muted — unanalyzed
+
 STATUS_ICON = {"pick": "✓", "reject": "✗", "maybe": "?"}
 STATUS_COLOR = {"pick": PICK_CLR, "reject": REJECT_CLR, "maybe": MAYBE_CLR}
 

@@ -112,6 +112,7 @@ class LoupeView(QWidget):
                  initial_blur: Optional[list[str]] = None,
                  initial_exposure: Optional[list[str]] = None,
                  initial_noise: Optional[list[str]] = None,
+                 initial_horizon: Optional[list[str]] = None,
                  settings=None,
                  parent=None):
         super().__init__(parent)
@@ -131,6 +132,7 @@ class LoupeView(QWidget):
         self._blur = list(initial_blur) if initial_blur else []
         self._exposure = list(initial_exposure) if initial_exposure else []
         self._noise = list(initial_noise) if initial_noise else []
+        self._horizon = list(initial_horizon) if initial_horizon else []
         self._zoom = 1.0
         self._base_pixmap: QPixmap | None = None
 
@@ -183,6 +185,18 @@ class LoupeView(QWidget):
         self._exposure_label.setParent(self)
         self._exposure_label.resize(260, 30)
         self._exposure_label.raise_()
+
+        # --- horizon skew label overlay (top-right, below exposure) ---
+        self._horizon_label = QLabel("")
+        self._horizon_label.setObjectName("loupe_horizon_label")
+        self._horizon_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._horizon_label.setStyleSheet(
+            "color: #aaa; font-size: 13px; background: transparent; padding: 4px;"
+        )
+        self._horizon_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._horizon_label.setParent(self)
+        self._horizon_label.resize(260, 30)
+        self._horizon_label.raise_()
 
         # --- bottom toolbar (auto-hide) ---
         self._toolbar = QWidget(self)
@@ -259,6 +273,7 @@ class LoupeView(QWidget):
         self._position_chrome()
         self._blur_label.move(self.width() - 270, 16)
         self._exposure_label.move(self.width() - 270, 46)
+        self._horizon_label.move(self.width() - 270, 76)
 
     def _position_chrome(self):
         bottom_h = 56
@@ -344,6 +359,7 @@ class LoupeView(QWidget):
         self._update_status_label()
         self._update_blur_label()
         self._update_exposure_label()
+        self._update_horizon_label()
 
     def _on_filter_changed(self, statuses: list, colors: list):
         self._statuses = list(statuses)
@@ -362,6 +378,8 @@ class LoupeView(QWidget):
             blur=self._blur or None,
             exposure=self._exposure or None,
             noise=self._noise or None,
+            horizon=self._horizon or None,
+            horizon_skew_threshold=self._horizon_settings(),
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -478,6 +496,11 @@ class LoupeView(QWidget):
             return 0.5
         return float(self._settings.get("noise_fixed_threshold", 0.5))
 
+    def _horizon_settings(self) -> float:
+        if self._settings is None:
+            return 1.0
+        return float(self._settings.get("horizon_skew_threshold", 1.0))
+
     def _update_exposure_label(self):
         from app.utils.theme import (
             EXPOSURE_OVEREXPOSED, EXPOSURE_UNDEREXPOSED, EXPOSURE_BLACK,
@@ -520,6 +543,30 @@ class LoupeView(QWidget):
 
         self._exposure_label.setText(text)
         self._exposure_label.setStyleSheet(
+            f"color:{color}; font-size:13px; background:transparent; padding:4px;"
+        )
+
+    def _update_horizon_label(self):
+        from app.utils.theme import HORIZON_LEVEL, HORIZON_TILTED, HORIZON_UNKNOWN
+        from app.core.horizon_service import HorizonService
+        if not self._ids:
+            self._horizon_label.setText("")
+            return
+        photo_id = self._ids[self._idx]
+        photo = self._photo_repo.get_by_id(photo_id)
+        if photo is None:
+            self._horizon_label.setText("")
+            return
+        skew = photo.horizon_skew
+        if skew is None:
+            text, color = "Horizon: —", HORIZON_UNKNOWN
+        else:
+            state = HorizonService.skew_state(photo, level_threshold=self._horizon_settings())
+            color = HORIZON_LEVEL if state == "level" else HORIZON_TILTED
+            sign = "+" if skew > 0 else ""
+            text = f"Horizon: {sign}{skew:.1f}°"
+        self._horizon_label.setText(text)
+        self._horizon_label.setStyleSheet(
             f"color:{color}; font-size:13px; background:transparent; padding:4px;"
         )
 

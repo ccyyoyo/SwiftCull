@@ -13,6 +13,7 @@ from app.utils.theme import (
     EXPOSURE_OVEREXPOSED, EXPOSURE_UNDEREXPOSED, EXPOSURE_BLACK,
     EXPOSURE_NORMAL, EXPOSURE_UNKNOWN,
     NOISE_NOISY, NOISE_CLEAN, NOISE_UNKNOWN,
+    HORIZON_LEVEL, HORIZON_TILTED, HORIZON_UNKNOWN,
 )
 
 STATUSES = ["pick", "reject", "maybe", "untagged"]
@@ -176,8 +177,8 @@ class _CollapsedTab(QWidget):
 
 
 class FilterPanel(QWidget):
-    filter_changed = Signal(list, list, list, list, list)  # statuses, colors, blur, exposure, noise
-    group_selected = Signal(object)                        # Optional[int] – None = show all
+    filter_changed = Signal(list, list, list, list, list, list)  # statuses, colors, blur, exposure, noise, horizon
+    group_selected = Signal(object)                              # Optional[int] – None = show all
 
     def __init__(self, settings=None, parent=None):
         super().__init__(parent)
@@ -190,6 +191,7 @@ class FilterPanel(QWidget):
         self._noise_checks: dict = {}
         self._group_buttons: list[QPushButton] = []
         self._selected_group_id: object = None  # Optional[int]
+        self._horizon_checks: dict = {}
 
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setStyleSheet(f"background:{BG_PANEL};")
@@ -416,6 +418,28 @@ class FilterPanel(QWidget):
         self._similar_groups_layout.setSpacing(2)
         cl.addWidget(self._similar_groups_container)
 
+        cl.addSpacing(8)
+
+        # HORIZON section
+        sec5 = QLabel("HORIZON")
+        sec5.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(sec5)
+
+        horizon_items = [
+            ("level",      "水平",   HORIZON_LEVEL),
+            ("tilted",     "傾斜",   HORIZON_TILTED),
+            ("unanalyzed", "未分析", HORIZON_UNKNOWN),
+        ]
+        for hz_key, label, color in horizon_items:
+            cb = QCheckBox(label)
+            cb.setObjectName(f"filter_horizon_{hz_key}")
+            cb.setStyleSheet(f"color:{color}; font-size:10px;")
+            cb.stateChanged.connect(self._emit_filter)
+            self._horizon_checks[hz_key] = cb
+            cl.addWidget(cb)
+
         cl.addStretch()
 
         scroll.setWidget(self._content)
@@ -439,14 +463,16 @@ class FilterPanel(QWidget):
         blur = [k for k, cb in self._blur_checks.items() if cb.isChecked()]
         exposure = [k for k, cb in self._exposure_checks.items() if cb.isChecked()]
         noise = [k for k, cb in self._noise_checks.items() if cb.isChecked()]
-        self.filter_changed.emit(statuses, colors, blur, exposure, noise)
+        horizon = [k for k, cb in self._horizon_checks.items() if cb.isChecked()]
+        self.filter_changed.emit(statuses, colors, blur, exposure, noise, horizon)
 
     def _clear_all(self):
         for cb in (list(self._status_checks.values())
                    + list(self._color_checks.values())
                    + list(self._blur_checks.values())
                    + list(self._exposure_checks.values())
-                   + list(self._noise_checks.values())):
+                   + list(self._noise_checks.values())
+                   + list(self._horizon_checks.values())):
             cb.setChecked(False)
 
     def _open_blur_settings(self):

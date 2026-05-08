@@ -127,6 +127,36 @@ class PhotoRepository:
         ).fetchall()
         return {int(r["id"]): r["phash_hash"] for r in rows}
 
+    def update_horizon_skew(self, photo_id: int, skew_angle: float) -> None:
+        self._conn.execute(
+            "UPDATE photos SET horizon_skew=?, horizon_analyzed=1 WHERE id=?",
+            (skew_angle, photo_id),
+        )
+        self._conn.commit()
+
+    def mark_horizon_no_result(self, photo_id: int) -> None:
+        """Mark photo as analyzed even though no horizon line was found.
+        Prevents re-processing on every button click."""
+        self._conn.execute(
+            "UPDATE photos SET horizon_analyzed=1 WHERE id=?", (photo_id,)
+        )
+        self._conn.commit()
+
+    def get_horizon_unanalyzed_ids(self) -> list[int]:
+        """Return IDs of photos not yet attempted for horizon analysis."""
+        rows = self._conn.execute(
+            "SELECT id FROM photos WHERE horizon_analyzed = 0"
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+
+    def clear_horizon_skew(self, photo_id: int) -> None:
+        """Reset horizon analysis so the photo will be re-processed."""
+        self._conn.execute(
+            "UPDATE photos SET horizon_skew=NULL, horizon_analyzed=0 WHERE id=?",
+            (photo_id,),
+        )
+        self._conn.commit()
+
     def clear_exposure_scores(self, photo_id: int) -> None:
         """Clear stored exposure fields so the photo will be re-analyzed."""
         self._conn.execute(
@@ -170,4 +200,6 @@ class PhotoRepository:
             exposure_underexposed=row["exposure_underexposed"] if "exposure_underexposed" in row.keys() else None,
             phash_hash=row["phash_hash"] if "phash_hash" in row.keys() else None,
             noise_score=row["noise_score"] if "noise_score" in row.keys() else None,
+            horizon_skew=row["horizon_skew"] if "horizon_skew" in row.keys() else None,
+            horizon_analyzed=bool(row["horizon_analyzed"]) if "horizon_analyzed" in row.keys() else False,
         )
