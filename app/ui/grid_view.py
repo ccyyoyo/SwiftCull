@@ -82,11 +82,13 @@ class GridView(QWidget):
         self._current_group_id = None          # Optional[int] – for panel sync
         self._current_group_member_ids = None  # Optional[frozenset[int]] – for filtering
         self._current_horizon = None
+        self._current_face = None
         self._blur_ctrl = None
         self._exposure_ctrl = None
         self._noise_ctrl = None
         self._phash_ctrl = None
         self._horizon_ctrl = None
+        self._face_ctrl = None
         self._db_path: str = ""
         self._selected_ids: list[int] = []
         self._current_statuses = None
@@ -250,6 +252,21 @@ class GridView(QWidget):
         self._horizon_btn.clicked.connect(self._on_horizon_clicked)
         tb.addWidget(self._horizon_btn)
 
+        self._face_btn = QPushButton("☻  分析人臉")
+        self._face_btn.setObjectName("grid_analyze_face_button")
+        self._face_btn.setCursor(Qt.PointingHandCursor)
+        self._face_btn.setToolTip("偵測尚未分析人臉的照片（含閉眼判定）")
+        self._face_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid #333; border-radius:3px; padding:3px 10px;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover:!disabled {{ background:#2a2a2a; color:#ddd;"
+            f" border-color:#555; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:#222; }}"
+        )
+        self._face_btn.clicked.connect(self._on_face_clicked)
+        tb.addWidget(self._face_btn)
+
         self._split_btn = QPushButton("⊟  分割預覽")
         self._split_btn.setObjectName("grid_split_preview_button")
         self._split_btn.setCheckable(True)
@@ -372,7 +389,7 @@ class GridView(QWidget):
             self._split_btn.setText("⊟  分割預覽")
 
     def _refresh(self, statuses=None, colors=None, blur=None, exposure=None,
-                 noise=None, horizon=None,
+                 noise=None, horizon=None, face=None,
                  blur_mode=None, blur_fixed_threshold=None,
                  blur_relative_percent=None,
                  noise_fixed_threshold=None):
@@ -382,15 +399,17 @@ class GridView(QWidget):
         self._current_exposure = exposure
         self._current_noise = noise
         self._current_horizon = horizon
+        self._current_face = face
         if blur_mode is None or blur_fixed_threshold is None or blur_relative_percent is None:
             blur_mode, blur_fixed_threshold, blur_relative_percent = self._blur_settings()
         clip, black_mean, black_shadow = self._exposure_settings()
         if noise_fixed_threshold is None:
             noise_fixed_threshold = self._noise_settings()
         skew_threshold = self._horizon_settings()
+        eyes_closed_threshold = self._face_settings()
         photos = self._filter_svc.filter(
             statuses=statuses, colors=colors, blur=blur, exposure=exposure,
-            noise=noise, horizon=horizon,
+            noise=noise, horizon=horizon, face=face,
             horizon_skew_threshold=skew_threshold,
             blur_mode=blur_mode,
             blur_fixed_threshold=blur_fixed_threshold,
@@ -399,6 +418,7 @@ class GridView(QWidget):
             exposure_black_mean_threshold=black_mean,
             exposure_black_shadow_threshold=black_shadow,
             noise_fixed_threshold=noise_fixed_threshold,
+            eyes_closed_threshold=eyes_closed_threshold,
             group_member_ids=self._current_group_member_ids,
         )
         self._grid.load_photos(photos, self._tag_repo, self._thumb_svc, self._folder)
@@ -420,6 +440,9 @@ class GridView(QWidget):
 
     def _horizon_settings(self) -> float:
         return float(self._settings.get("horizon_skew_threshold", 1.0))
+
+    def _face_settings(self) -> int:
+        return int(self._settings.get("face_eyes_closed_threshold", 1))
 
     def begin_import(self, total: int):
         self._import_total = total
@@ -547,16 +570,17 @@ class GridView(QWidget):
             return
         ErrorListDialog(self._import_errors, self).exec()
 
-    def _on_filter_changed(self, statuses, colors, blur, exposure, noise, horizon):
+    def _on_filter_changed(self, statuses, colors, blur, exposure, noise, horizon, face):
         self._current_blur = blur or None
         self._current_exposure = exposure or None
         self._current_noise = noise or None
         self._current_horizon = horizon or None
+        self._current_face = face or None
         mode, threshold, percent = self._blur_settings()
         noise_threshold = self._noise_settings()
         self._refresh(
             statuses or None, colors or None, blur or None, exposure or None,
-            noise=noise or None, horizon=horizon or None,
+            noise=noise or None, horizon=horizon or None, face=face or None,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -579,6 +603,8 @@ class GridView(QWidget):
         self._refresh(
             self._current_statuses, self._current_colors,
             self._current_blur, self._current_exposure,
+            noise=self._current_noise, horizon=self._current_horizon,
+            face=self._current_face,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -634,6 +660,7 @@ class GridView(QWidget):
         clip, black_mean, black_shadow = self._exposure_settings()
         noise_threshold = self._noise_settings()
         skew_threshold = self._horizon_settings()
+        eyes_closed_threshold = self._face_settings()
         photos = self._filter_svc.filter(
             statuses=self._current_statuses,
             colors=self._current_colors,
@@ -641,6 +668,7 @@ class GridView(QWidget):
             exposure=self._current_exposure,
             noise=self._current_noise,
             horizon=self._current_horizon,
+            face=self._current_face,
             horizon_skew_threshold=skew_threshold,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
@@ -649,6 +677,7 @@ class GridView(QWidget):
             exposure_black_mean_threshold=black_mean,
             exposure_black_shadow_threshold=black_shadow,
             noise_fixed_threshold=noise_threshold,
+            eyes_closed_threshold=eyes_closed_threshold,
             group_member_ids=self._current_group_member_ids,
         )
         photo_ids = [p.id for p in photos]
@@ -665,6 +694,7 @@ class GridView(QWidget):
             initial_exposure=self._current_exposure,
             initial_noise=self._current_noise,
             initial_horizon=self._current_horizon,
+            initial_face=self._current_face,
             settings=self._settings,
         )
         loupe.tag_changed.connect(self._grid.update_item_tag)
@@ -680,6 +710,7 @@ class GridView(QWidget):
         self._refresh(
             statuses or None, colors or None, self._current_blur, self._current_exposure,
             noise=self._current_noise, horizon=self._current_horizon,
+            face=self._current_face,
             blur_mode=mode,
             blur_fixed_threshold=threshold,
             blur_relative_percent=percent,
@@ -928,6 +959,43 @@ class GridView(QWidget):
 
     def stop_horizon_analysis(self, timeout_ms: int = 3000):
         ctrl = self._horizon_ctrl
+        if ctrl is None:
+            return
+        ctrl.cancel()
+        ctrl.wait(timeout_ms)
+
+    def _on_face_clicked(self):
+        if self._db_path:
+            self._start_face_analysis(self._db_path)
+
+    def _start_face_analysis(self, db_path: str):
+        import sqlite3 as _sq
+        from app.core.face_worker import FaceController
+        from app.db.photo_repository import PhotoRepository as _PR
+        if self._face_ctrl is not None:
+            return
+        conn = _sq.connect(db_path)
+        conn.row_factory = _sq.Row
+        repo = _PR(conn)
+        photo_ids = repo.get_face_unanalyzed_ids()
+        conn.close()
+        if not photo_ids:
+            return
+        self._face_btn.setEnabled(False)
+        self._face_ctrl = FaceController(self._folder, db_path, photo_ids)
+        self._face_ctrl.photo_face_updated.connect(self._on_photo_face_updated)
+        self._face_ctrl.finished.connect(self._on_face_finished)
+        self._face_ctrl.start()
+
+    def _on_photo_face_updated(self, photo_id: int, count: int, max_area: float, closed: int):
+        self._grid.update_item_tag(photo_id)
+
+    def _on_face_finished(self):
+        self._face_ctrl = None
+        self._face_btn.setEnabled(True)
+
+    def stop_face_analysis(self, timeout_ms: int = 3000):
+        ctrl = self._face_ctrl
         if ctrl is None:
             return
         ctrl.cancel()

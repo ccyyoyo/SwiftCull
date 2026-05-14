@@ -20,6 +20,7 @@ class FilterService:
         exposure: Optional[List[str]] = None,
         noise: Optional[List[str]] = None,
         horizon: Optional[List[str]] = None,
+        face: Optional[List[str]] = None,
         horizon_skew_threshold: float = 1.0,
         blur_mode: str = "fixed",
         blur_fixed_threshold: float = 100.0,
@@ -28,11 +29,12 @@ class FilterService:
         exposure_black_mean_threshold: float = 8.0,
         exposure_black_shadow_threshold: float = 0.90,
         noise_fixed_threshold: float = 0.5,
+        eyes_closed_threshold: int = 1,
         group_member_ids: Optional[FrozenSet[int]] = None,
     ) -> List[Photo]:
         log.debug(
-            "filter called: statuses=%s colors=%s blur=%s exposure=%s noise=%s horizon=%s group=%s",
-            statuses, colors, blur, exposure, noise, horizon,
+            "filter called: statuses=%s colors=%s blur=%s exposure=%s noise=%s horizon=%s face=%s group=%s",
+            statuses, colors, blur, exposure, noise, horizon, face,
             f"{len(group_member_ids)} ids" if group_member_ids is not None else None,
         )
         all_photos = self._photos.get_all()
@@ -40,7 +42,9 @@ class FilterService:
         if group_member_ids is not None:
             all_photos = [p for p in all_photos if p.id in group_member_ids]
 
-        if not statuses and not colors and not blur and not exposure and not noise and not horizon and group_member_ids is None:
+        if (not statuses and not colors and not blur and not exposure
+                and not noise and not horizon and not face
+                and group_member_ids is None):
             return all_photos
 
         effective_threshold = blur_fixed_threshold
@@ -106,6 +110,14 @@ class FilterService:
                 from app.core.horizon_service import HorizonService
                 state = HorizonService.skew_state(photo, level_threshold=horizon_skew_threshold)
                 if state not in horizon:
+                    continue
+
+            if face:
+                from app.core.face_service import FaceService
+                states = FaceService.face_states(
+                    photo, eyes_closed_threshold=eyes_closed_threshold
+                )
+                if not states.intersection(set(face)):
                     continue
 
             result.append(photo)

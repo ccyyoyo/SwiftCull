@@ -26,6 +26,10 @@ class Photo:
     noise_score: Optional[float] = None
     horizon_skew: Optional[float] = None
     horizon_analyzed: bool = False
+    face_count: Optional[int] = None
+    face_max_area: Optional[float] = None
+    face_eyes_closed_count: Optional[int] = None
+    face_analyzed: bool = False
 
 @dataclass
 class Tag:

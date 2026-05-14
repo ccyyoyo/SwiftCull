@@ -67,6 +67,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE photos ADD COLUMN horizon_skew REAL")
     if "horizon_analyzed" not in cols:
         conn.execute("ALTER TABLE photos ADD COLUMN horizon_analyzed INTEGER DEFAULT 0")
+    if "face_count" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN face_count INTEGER")
+    if "face_max_area" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN face_max_area REAL")
+    if "face_eyes_closed_count" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN face_eyes_closed_count INTEGER")
+    if "face_analyzed" not in cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN face_analyzed INTEGER DEFAULT 0")
 
     tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     if "groups" not in tables:

@@ -37,6 +37,11 @@ HORIZON_LEVEL   = "#3ddc84"  # green — level horizon
 HORIZON_TILTED  = "#FF6B6B"  # red — skewed horizon
 HORIZON_UNKNOWN = "#555555"  # muted — unanalyzed
 
+FACE_HAS         = "#3ddc84"  # green — has at least one face
+FACE_NONE        = "#888888"  # neutral — no face detected
+FACE_EYES_CLOSED = "#FFB347"  # amber warning — eyes closed
+FACE_UNKNOWN     = "#555555"  # muted — unanalyzed
+
 STATUS_ICON = {"pick": "✓", "reject": "✗", "maybe": "?"}
 STATUS_COLOR = {"pick": PICK_CLR, "reject": REJECT_CLR, "maybe": MAYBE_CLR}
 

@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
             self._grid_view.stop_blur_analysis()
             self._grid_view.stop_exposure_analysis()
             self._grid_view.stop_phash_analysis()
+            self._grid_view.stop_face_analysis()
         from app.db.connection import get_connection, init_db
         from app.db.photo_repository import PhotoRepository
         from app.db.tag_repository import TagRepository
@@ -265,6 +266,7 @@ class MainWindow(QMainWindow):
             self._grid_view.stop_blur_analysis()
             self._grid_view.stop_exposure_analysis()
             self._grid_view.stop_phash_analysis()
+            self._grid_view.stop_face_analysis()
         try:
             self._settings.close()
         except Exception:

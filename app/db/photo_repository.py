@@ -157,6 +157,44 @@ class PhotoRepository:
         )
         self._conn.commit()
 
+    def update_face_result(
+        self,
+        photo_id: int,
+        face_count: int,
+        face_max_area: float,
+        face_eyes_closed_count: int,
+    ) -> None:
+        self._conn.execute(
+            "UPDATE photos SET face_count=?, face_max_area=?,"
+            " face_eyes_closed_count=?, face_analyzed=1 WHERE id=?",
+            (face_count, face_max_area, face_eyes_closed_count, photo_id),
+        )
+        self._conn.commit()
+
+    def mark_face_no_result(self, photo_id: int) -> None:
+        """Mark photo as attempted even though face detection failed (e.g. unreadable).
+        Prevents re-processing on every button click."""
+        self._conn.execute(
+            "UPDATE photos SET face_analyzed=1 WHERE id=?", (photo_id,)
+        )
+        self._conn.commit()
+
+    def get_face_unanalyzed_ids(self) -> list[int]:
+        """Return IDs of photos not yet attempted for face analysis."""
+        rows = self._conn.execute(
+            "SELECT id FROM photos WHERE face_analyzed = 0"
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+
+    def clear_face_result(self, photo_id: int) -> None:
+        """Reset face analysis so the photo will be re-processed."""
+        self._conn.execute(
+            "UPDATE photos SET face_count=NULL, face_max_area=NULL,"
+            " face_eyes_closed_count=NULL, face_analyzed=0 WHERE id=?",
+            (photo_id,),
+        )
+        self._conn.commit()
+
     def clear_exposure_scores(self, photo_id: int) -> None:
         """Clear stored exposure fields so the photo will be re-analyzed."""
         self._conn.execute(
@@ -202,4 +240,8 @@ class PhotoRepository:
             noise_score=row["noise_score"] if "noise_score" in row.keys() else None,
             horizon_skew=row["horizon_skew"] if "horizon_skew" in row.keys() else None,
             horizon_analyzed=bool(row["horizon_analyzed"]) if "horizon_analyzed" in row.keys() else False,
+            face_count=row["face_count"] if "face_count" in row.keys() else None,
+            face_max_area=row["face_max_area"] if "face_max_area" in row.keys() else None,
+            face_eyes_closed_count=row["face_eyes_closed_count"] if "face_eyes_closed_count" in row.keys() else None,
+            face_analyzed=bool(row["face_analyzed"]) if "face_analyzed" in row.keys() else False,
         )

@@ -14,6 +14,7 @@ from app.utils.theme import (
     EXPOSURE_NORMAL, EXPOSURE_UNKNOWN,
     NOISE_NOISY, NOISE_CLEAN, NOISE_UNKNOWN,
     HORIZON_LEVEL, HORIZON_TILTED, HORIZON_UNKNOWN,
+    FACE_HAS, FACE_NONE, FACE_EYES_CLOSED, FACE_UNKNOWN,
 )
 
 STATUSES = ["pick", "reject", "maybe", "untagged"]
@@ -177,8 +178,8 @@ class _CollapsedTab(QWidget):
 
 
 class FilterPanel(QWidget):
-    filter_changed = Signal(list, list, list, list, list, list)  # statuses, colors, blur, exposure, noise, horizon
-    group_selected = Signal(object)                              # Optional[int] – None = show all
+    filter_changed = Signal(list, list, list, list, list, list, list)  # statuses, colors, blur, exposure, noise, horizon, face
+    group_selected = Signal(object)                                    # Optional[int] – None = show all
 
     def __init__(self, settings=None, parent=None):
         super().__init__(parent)
@@ -192,6 +193,7 @@ class FilterPanel(QWidget):
         self._group_buttons: list[QPushButton] = []
         self._selected_group_id: object = None  # Optional[int]
         self._horizon_checks: dict = {}
+        self._face_checks: dict = {}
 
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setStyleSheet(f"background:{BG_PANEL};")
@@ -440,6 +442,29 @@ class FilterPanel(QWidget):
             self._horizon_checks[hz_key] = cb
             cl.addWidget(cb)
 
+        cl.addSpacing(8)
+
+        # FACE section
+        sec_face = QLabel("FACE")
+        sec_face.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; letter-spacing:1px; margin-top:4px;"
+        )
+        cl.addWidget(sec_face)
+
+        face_items = [
+            ("has_face",    "有人臉",  FACE_HAS),
+            ("no_face",     "無人臉",  FACE_NONE),
+            ("eyes_closed", "閉眼",    FACE_EYES_CLOSED),
+            ("unanalyzed",  "未分析",  FACE_UNKNOWN),
+        ]
+        for face_key, label, color in face_items:
+            cb = QCheckBox(label)
+            cb.setObjectName(f"filter_face_{face_key}")
+            cb.setStyleSheet(f"color:{color}; font-size:10px;")
+            cb.stateChanged.connect(self._emit_filter)
+            self._face_checks[face_key] = cb
+            cl.addWidget(cb)
+
         cl.addStretch()
 
         scroll.setWidget(self._content)
@@ -464,7 +489,8 @@ class FilterPanel(QWidget):
         exposure = [k for k, cb in self._exposure_checks.items() if cb.isChecked()]
         noise = [k for k, cb in self._noise_checks.items() if cb.isChecked()]
         horizon = [k for k, cb in self._horizon_checks.items() if cb.isChecked()]
-        self.filter_changed.emit(statuses, colors, blur, exposure, noise, horizon)
+        face = [k for k, cb in self._face_checks.items() if cb.isChecked()]
+        self.filter_changed.emit(statuses, colors, blur, exposure, noise, horizon, face)
 
     def _clear_all(self):
         for cb in (list(self._status_checks.values())
@@ -472,7 +498,8 @@ class FilterPanel(QWidget):
                    + list(self._blur_checks.values())
                    + list(self._exposure_checks.values())
                    + list(self._noise_checks.values())
-                   + list(self._horizon_checks.values())):
+                   + list(self._horizon_checks.values())
+                   + list(self._face_checks.values())):
             cb.setChecked(False)
 
     def _open_blur_settings(self):

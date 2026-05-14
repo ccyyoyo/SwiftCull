@@ -113,6 +113,7 @@ class LoupeView(QWidget):
                  initial_exposure: Optional[list[str]] = None,
                  initial_noise: Optional[list[str]] = None,
                  initial_horizon: Optional[list[str]] = None,
+                 initial_face: Optional[list[str]] = None,
                  settings=None,
                  parent=None):
         super().__init__(parent)
@@ -133,6 +134,7 @@ class LoupeView(QWidget):
         self._exposure = list(initial_exposure) if initial_exposure else []
         self._noise = list(initial_noise) if initial_noise else []
         self._horizon = list(initial_horizon) if initial_horizon else []
+        self._face = list(initial_face) if initial_face else []
         self._zoom = 1.0
         self._base_pixmap: QPixmap | None = None
 
@@ -197,6 +199,18 @@ class LoupeView(QWidget):
         self._horizon_label.setParent(self)
         self._horizon_label.resize(260, 30)
         self._horizon_label.raise_()
+
+        # --- face label overlay (top-right, below horizon) ---
+        self._face_label = QLabel("")
+        self._face_label.setObjectName("loupe_face_label")
+        self._face_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._face_label.setStyleSheet(
+            "color: #aaa; font-size: 13px; background: transparent; padding: 4px;"
+        )
+        self._face_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._face_label.setParent(self)
+        self._face_label.resize(260, 30)
+        self._face_label.raise_()
 
         # --- bottom toolbar (auto-hide) ---
         self._toolbar = QWidget(self)
@@ -274,6 +288,7 @@ class LoupeView(QWidget):
         self._blur_label.move(self.width() - 270, 16)
         self._exposure_label.move(self.width() - 270, 46)
         self._horizon_label.move(self.width() - 270, 76)
+        self._face_label.move(self.width() - 270, 106)
 
     def _position_chrome(self):
         bottom_h = 56
@@ -360,6 +375,7 @@ class LoupeView(QWidget):
         self._update_blur_label()
         self._update_exposure_label()
         self._update_horizon_label()
+        self._update_face_label()
 
     def _on_filter_changed(self, statuses: list, colors: list):
         self._statuses = list(statuses)
@@ -372,6 +388,7 @@ class LoupeView(QWidget):
         mode, threshold, percent = self._blur_settings()
         clip, black_mean, black_shadow = self._exposure_settings()
         noise_threshold = self._noise_settings()
+        eyes_closed_threshold = self._face_settings()
         new_photos = self._filter_svc.filter(
             statuses=self._statuses or None,
             colors=self._colors or None,
@@ -379,6 +396,7 @@ class LoupeView(QWidget):
             exposure=self._exposure or None,
             noise=self._noise or None,
             horizon=self._horizon or None,
+            face=self._face or None,
             horizon_skew_threshold=self._horizon_settings(),
             blur_mode=mode,
             blur_fixed_threshold=threshold,
@@ -387,6 +405,7 @@ class LoupeView(QWidget):
             exposure_black_mean_threshold=black_mean,
             exposure_black_shadow_threshold=black_shadow,
             noise_fixed_threshold=noise_threshold,
+            eyes_closed_threshold=eyes_closed_threshold,
         )
         new_ids = [p.id for p in new_photos]
 
@@ -501,6 +520,11 @@ class LoupeView(QWidget):
             return 1.0
         return float(self._settings.get("horizon_skew_threshold", 1.0))
 
+    def _face_settings(self) -> int:
+        if self._settings is None:
+            return 1
+        return int(self._settings.get("face_eyes_closed_threshold", 1))
+
     def _update_exposure_label(self):
         from app.utils.theme import (
             EXPOSURE_OVEREXPOSED, EXPOSURE_UNDEREXPOSED, EXPOSURE_BLACK,
@@ -567,6 +591,34 @@ class LoupeView(QWidget):
             text = f"Horizon: {sign}{skew:.1f}°"
         self._horizon_label.setText(text)
         self._horizon_label.setStyleSheet(
+            f"color:{color}; font-size:13px; background:transparent; padding:4px;"
+        )
+
+    def _update_face_label(self):
+        from app.utils.theme import (
+            FACE_HAS, FACE_NONE, FACE_EYES_CLOSED, FACE_UNKNOWN,
+        )
+        if not self._ids:
+            self._face_label.setText("")
+            return
+        photo_id = self._ids[self._idx]
+        photo = self._photo_repo.get_by_id(photo_id)
+        if photo is None:
+            self._face_label.setText("")
+            return
+        if not photo.face_analyzed:
+            text, color = "Faces: —", FACE_UNKNOWN
+        else:
+            count = photo.face_count or 0
+            closed = photo.face_eyes_closed_count or 0
+            if count == 0:
+                text, color = "Faces: 0", FACE_NONE
+            elif closed >= self._face_settings():
+                text, color = f"Faces: {count} ({closed} closed)", FACE_EYES_CLOSED
+            else:
+                text, color = f"Faces: {count}", FACE_HAS
+        self._face_label.setText(text)
+        self._face_label.setStyleSheet(
             f"color:{color}; font-size:13px; background:transparent; padding:4px;"
         )
 
